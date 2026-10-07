@@ -1,0 +1,16 @@
+node_modules/
+.svelte-kit/
+build/
+.DS_Store
+
+# 비밀값
+.env
+.env.*
+!.env.example
+
+# 단어 데이터(학원 자료)와 DB
+data/
+
+# 테스트 산출물
+test-results/
+playwright-report/
