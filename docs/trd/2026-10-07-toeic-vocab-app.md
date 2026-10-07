@@ -4,6 +4,8 @@
 - 상태: 확정 (spec-review 1회, 코드 리뷰 1회 반영)
 - PRD: `docs/prd/2026-10-07-toeic-vocab-app.md`
 
+> **10-08 변경:** 내 단어 묶음(`day_words.section`, 스키마 v2)과 카드 보기(`/study?mode=browse`)의 데이터 모델·인터페이스는 `docs/design/2026-10-08-my-words.md`를 따른다. 이 문서와 다르면 메모가 우선한다. 9장 등록 절차는 README가 최신이다.
+
 ## 1. 개요
 
 - 이 문서는 PRD의 R-1~R-44 전부를 다룬다.
@@ -605,7 +607,7 @@ function progress(s: SessionState): { position: number; total: number; round: nu
 - **S-1:** 등록 응답의 `created + linked + skipped` 수가 종이 줄 수(111)와 같고, `created + linked`가 고유 단어 수(99)와 같은지 확인한다.
 - **S-5:** 사용자 관찰이다. `study_logs`의 날짜별 행으로 확인한다.
 
-## 9. 등록 절차 (README에 그대로 싣는다)
+## 9. 등록 절차 (MVP 당시. 최신 절차는 README)
 
 1. 사용자가 종이 사진을 Claude Code 대화에 첨부한다.
 2. Claude가 종이 순서대로 `ImportInput` JSON을 만들어 `data/import/dayNN.json`에 저장한다.
