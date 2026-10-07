@@ -4,10 +4,16 @@
 	import { isEnglishMasked, isMeaningMasked, prefs } from '$lib/client/prefs.svelte';
 	import MaskCell from './MaskCell.svelte';
 
-	let { word, flipped, actions }: { word: Word; flipped: boolean; actions?: Snippet } = $props();
+	let {
+		word,
+		flipped,
+		hiddenMark = false,
+		actions
+	}: { word: Word; flipped: boolean; hiddenMark?: boolean; actions?: Snippet } = $props();
 </script>
 
 <article class="card" data-testid="card" aria-label="단어 카드">
+	{#if hiddenMark}<span class="hidden-mark">숨긴 단어</span>{/if}
 	<div class="actions" data-card-action>{@render actions?.()}</div>
 	{#if flipped}
 		<div class="back" data-testid="card-back">
@@ -45,6 +51,16 @@
 		border: 1px solid var(--line);
 		user-select: none;
 		-webkit-user-select: none;
+	}
+	.hidden-mark {
+		position: absolute;
+		top: 20px;
+		left: 20px;
+		padding: 4px 10px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		color: var(--muted);
+		font-size: 13px;
 	}
 	.actions {
 		position: absolute;

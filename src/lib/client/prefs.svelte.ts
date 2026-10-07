@@ -1,4 +1,4 @@
-import type { Order, Repeat, ViewMode } from '$lib/domain/types';
+import type { Order, Repeat, StudyGroup, ViewMode } from '$lib/domain/types';
 
 const VIEW_KEY = 'vocab.viewMode';
 const MODES: ViewMode[] = ['both', 'english', 'meaning'];
@@ -46,21 +46,27 @@ export function isMeaningMasked(mode: ViewMode): boolean {
 	return mode === 'english';
 }
 
-export type StudyPrefs = { order: Order; repeat: Repeat };
+export type StudyPrefs = { order: Order; repeat: Repeat; group: StudyGroup };
 
 const STUDY_KEY = 'vocab.studyPrefs';
 const ORDERS: Order[] = ['textbook', 'random', 'alpha'];
 const REPEATS: Repeat[] = [1, 2, 3, 'loop'];
+const GROUPS: StudyGroup[] = ['all', 'class', 'mine'];
 
-// 처음에는 교재순·1회 (R-28), 이후에는 마지막 선택 (R-29)
+// 처음에는 교재순·1회·둘 다 (R-28), 이후에는 마지막 선택 (R-29)
+// 칸마다 따로 검사해 예전에 저장한 값(group 없음)도 순서·반복은 살린다
 export function loadStudyPrefs(): StudyPrefs {
+	let saved: Partial<StudyPrefs> = {};
 	try {
-		const saved = JSON.parse(read(STUDY_KEY) ?? '{}');
-		if (ORDERS.includes(saved.order) && REPEATS.includes(saved.repeat)) return saved;
+		saved = JSON.parse(read(STUDY_KEY) ?? '{}') ?? {};
 	} catch {
 		// 깨진 값이면 기본값
 	}
-	return { order: 'textbook', repeat: 1 };
+	return {
+		order: ORDERS.includes(saved.order as Order) ? (saved.order as Order) : 'textbook',
+		repeat: REPEATS.includes(saved.repeat as Repeat) ? (saved.repeat as Repeat) : 1,
+		group: GROUPS.includes(saved.group as StudyGroup) ? (saved.group as StudyGroup) : 'all'
+	};
 }
 
 export function saveStudyPrefs(value: StudyPrefs) {

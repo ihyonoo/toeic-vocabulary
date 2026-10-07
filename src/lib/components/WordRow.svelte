@@ -13,7 +13,8 @@
 		onbookmark,
 		onhide,
 		onedit,
-		ondelete
+		ondelete,
+		onopencard
 	}: {
 		word: Word;
 		open: boolean;
@@ -23,6 +24,7 @@
 		onhide: () => void;
 		onedit: () => void;
 		ondelete: () => void;
+		onopencard?: () => void;
 	} = $props();
 
 	const MENU_WIDTH = 216;
@@ -72,6 +74,14 @@
 		drag = null;
 	}
 
+	// 가림 칸·버튼 바깥을 누르면 카드 보기로 간다
+	// 메뉴가 열려 있으면 먼저 닫는다
+	function onclick(e: MouseEvent) {
+		if ((e.target as HTMLElement).closest('button, [data-mask]')) return;
+		if (open) onclose();
+		else onopencard?.();
+	}
+
 	// 밀기 직후 따라오는 click이 칸 토글이나 북마크로 번지지 않게 막는다
 	function onclickcapture(e: MouseEvent) {
 		if (!suppressClick) return;
@@ -90,7 +100,7 @@
 		</div>
 	{/if}
 	<!-- 행 밀기는 터치 전용 보조 조작이고, 실제 동작은 안쪽 버튼이 맡는다 -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div
 		class="row"
 		class:settling={drag === null}
@@ -101,6 +111,7 @@
 		{onpointerup}
 		{onpointercancel}
 		{onclickcapture}
+		{onclick}
 	>
 		<div class="english">
 			<MaskCell masked={isEnglishMasked(prefs.viewMode)}>{word.english}</MaskCell>

@@ -81,7 +81,7 @@ test('행을 밀어 삭제하면 확인을 거쳐 모든 Day에서 사라진다 
 	await expect(page.getByRole('listitem')).toHaveCount(0);
 });
 
-test('단어 추가로 영어·뜻을 넣으면 Day 끝에 붙고, 이미 있으면 이유를 보여준다 (R-22)', async ({
+test('단어 추가로 영어·뜻을 넣으면 내 단어 끝에 붙고, 이미 있으면 이유를 보여준다 (R-22)', async ({
 	page,
 	request
 }) => {
@@ -100,7 +100,7 @@ test('단어 추가로 영어·뜻을 넣으면 Day 끝에 붙고, 이미 있으
 	await sheet.getByLabel('영어').fill('Orbit');
 	await sheet.getByLabel('뜻').fill('궤도');
 	await sheet.getByRole('button', { name: '추가' }).click();
-	await expect(sheet.getByText('이 Day에 이미 있는 단어예요')).toBeVisible();
+	await expect(sheet.getByText('이 Day의 수업 단어에 이미 있어요.')).toBeVisible();
 });
 
 test('단어 수정 API는 409와 정규화된 값을, Day 삭제 API는 지운 단어 수를 돌려준다 (R-7, R-8)', async ({

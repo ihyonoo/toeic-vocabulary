@@ -234,3 +234,20 @@ describe('성질: 모든 바퀴에 모든 카드가 정확히 한 번씩 (S-3)',
 		for (const round of seen) expect(new Set(round).size).toBe(7000);
 	});
 });
+
+describe('시작 위치 (카드 보기)', () => {
+	it('startId 카드부터 시작하고, 앞으로 돌아갈 수도 끝까지 갈 수도 있다', () => {
+		let s = createSession(words(5), { order: 'textbook', repeat: 1, startId: 3 });
+		expect(currentId(s)).toBe(3);
+		expect(progress(s)).toMatchObject({ position: 3, total: 5 });
+		s = prev(prev(s));
+		expect(currentId(s)).toBe(1);
+		const { seen, state } = walk(s);
+		expect(seen).toEqual([[1, 2, 3, 4, 5]]);
+		expect(state.status).toBe('done');
+	});
+
+	it('startId가 목록에 없으면 첫 카드부터 시작한다', () => {
+		expect(currentId(createSession(words(3), { order: 'textbook', repeat: 1, startId: 99 }))).toBe(1);
+	});
+});

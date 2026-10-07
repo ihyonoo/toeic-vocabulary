@@ -44,7 +44,7 @@
 	open={studyOpen}
 	onclose={() => (studyOpen = false)}
 	scope="all"
-	studyableCount={data.studyableCount}
+	studyableCounts={data.studyableCounts}
 />
 
 <style>

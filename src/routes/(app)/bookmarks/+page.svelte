@@ -14,6 +14,15 @@
 	});
 
 	let studyOpen = $state(false);
+
+	// 두 묶음에 모두 속한 단어는 두 묶음 모두에서 센다
+	function countBy(list: Word[]) {
+		return {
+			all: list.length,
+			class: list.filter((w) => w.sections.includes('class')).length,
+			mine: list.filter((w) => w.sections.includes('mine')).length
+		};
+	}
 </script>
 
 <PageHeader title="북마크" back="/">
@@ -27,7 +36,7 @@
 		<p class="empty">북마크한 단어가 없어요. 목록이나 학습 카드에서 북마크를 누르면 여기에 모여요.</p>
 	{:else}
 		<p class="count">{words.length}단어</p>
-		<WordList bind:words />
+		<WordList bind:words cardHref={(word) => `/study?scope=bookmarks&mode=browse&start=${word.id}`} />
 	{/if}
 </main>
 
@@ -39,7 +48,7 @@
 	open={studyOpen}
 	onclose={() => (studyOpen = false)}
 	scope="bookmarks"
-	studyableCount={words.filter((w) => w.bookmarked && !w.hidden).length}
+	studyableCounts={countBy(words.filter((w) => w.bookmarked && !w.hidden))}
 />
 
 <style>

@@ -4,5 +4,5 @@ import { countStudyableWords, listDays } from '$lib/server/repo';
 
 export const load: PageServerLoad = () => {
 	const db = getDb();
-	return { days: listDays(db), studyableCount: countStudyableWords(db) };
+	return { days: listDays(db), studyableCounts: countStudyableWords(db) };
 };

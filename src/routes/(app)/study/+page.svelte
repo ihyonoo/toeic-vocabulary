@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { keepScreenOn } from '$lib/client/wakeLock';
 	import BookmarkSimpleIcon from 'phosphor-svelte/lib/BookmarkSimpleIcon';
 	import CaretLeftIcon from 'phosphor-svelte/lib/CaretLeftIcon';
+	import EyeIcon from 'phosphor-svelte/lib/EyeIcon';
 	import EyeSlashIcon from 'phosphor-svelte/lib/EyeSlashIcon';
 	import type { Word } from '$lib/domain/types';
 	import { createSession, currentId, hide, next, prev, progress } from '$lib/domain/session';
@@ -30,7 +32,10 @@
 	});
 	// load가 다시 실행되면(다시 학습) 새 세션을 만든다
 	// 진행 중에는 대입으로 덮어쓴다
-	let session = $derived(createSession(data.words, { order: data.order, repeat: data.repeat }));
+	let session = $derived(
+		createSession(data.words, { order: data.order, repeat: data.repeat, startId: data.start ?? undefined })
+	);
+	const browsing = $derived(data.mode === 'browse');
 	const id = $derived(currentId(session));
 	const word = $derived(id === null ? undefined : words[id]);
 	const status = $derived(progress(session));
@@ -164,10 +169,17 @@
 		}
 	}
 
+	// 카드 보기에서는 카드를 빼지 않고 숨김만 켜고 끈다
+	function toggleHidden() {
+		if (word) toggleFlag(word, 'hidden', () => showToast('숨기기를 저장하지 못했어요.'));
+	}
+
 	// Day 학습에서 첫 바퀴가 끝나면 세션당 한 번 기록한다 (R-13)
+	// 카드 보기는 기록하지 않는다
 	let recordedFor: unknown = null;
 	$effect(() => {
-		if (data.scope !== 'day' || data.day === null || !session.firstRoundFinished || recordedFor === data) return;
+		if (browsing || data.scope !== 'day' || data.day === null) return;
+		if (!session.firstRoundFinished || recordedFor === data) return;
 		recordedFor = data;
 		record(data.day);
 	});
@@ -185,6 +197,17 @@
 	}
 
 	onMount(() => keepScreenOn());
+
+	// 목록에서 왔으면 뒤로 가기로 돌아가 목록의 스크롤 위치를 지킨다
+	// 연달아 누르면 목록을 지나 그 앞 화면으로 가므로 한 번만 돌아간다
+	let leaving = false;
+	function goBack(e: MouseEvent) {
+		if (!page.state.fromList) return;
+		e.preventDefault();
+		if (leaving) return;
+		leaving = true;
+		history.back();
+	}
 
 	// 숨김·북마크 변경을 반영하도록 load를 다시 실행해 새 세션을 만든다 (R-38)
 	async function restart() {
@@ -205,7 +228,7 @@
 
 <div class="study">
 	<header class="bar">
-		<a class="icon-btn" href={backHref} aria-label="뒤로"><CaretLeftIcon size={22} /></a>
+		<a class="icon-btn" href={backHref} aria-label="뒤로" onclick={goBack}><CaretLeftIcon size={22} /></a>
 		<div class="status">
 			{#if session.status === 'active'}
 				<span data-testid="progress">{status.position} / {status.total}</span>
@@ -237,7 +260,7 @@
 				style:transition={animating ? `transform ${CARD_ANIMATION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)` : 'none'}
 			>
 				{#key `${session.round}-${session.index}-${id}`}
-					<StudyCard {word} {flipped}>
+					<StudyCard {word} {flipped} hiddenMark={browsing && word.hidden}>
 						{#snippet actions()}
 							<button
 								type="button"
@@ -249,9 +272,20 @@
 							>
 								<BookmarkSimpleIcon size={22} weight={word.bookmarked ? 'fill' : 'regular'} />
 							</button>
-							<button type="button" class="icon-btn card-action" aria-label="숨기기" onclick={hideCurrent}>
-								<EyeSlashIcon size={22} />
-							</button>
+							{#if browsing && word.hidden}
+								<button type="button" class="icon-btn card-action" aria-label="숨김 해제" onclick={toggleHidden}>
+									<EyeIcon size={22} />
+								</button>
+							{:else}
+								<button
+									type="button"
+									class="icon-btn card-action"
+									aria-label="숨기기"
+									onclick={browsing ? toggleHidden : hideCurrent}
+								>
+									<EyeSlashIcon size={22} />
+								</button>
+							{/if}
 						{/snippet}
 					</StudyCard>
 				{/key}
@@ -262,12 +296,14 @@
 			{#if session.status === 'empty'}
 				<p class="headline">학습할 단어가 없어요</p>
 				<p class="sub">숨긴 단어는 학습에서 빠져요.</p>
+			{:else if browsing}
+				<p class="headline">다 봤어요</p>
 			{:else}
 				<p class="headline">학습을 마쳤어요</p>
 			{/if}
 			<div class="finished-actions">
-				<a class="btn btn-secondary" href={backHref}>목록으로</a>
-				{#if session.status === 'done'}
+				<a class="btn btn-secondary" href={backHref} onclick={goBack}>목록으로</a>
+				{#if session.status === 'done' && !browsing}
 					<button class="btn btn-primary" type="button" onclick={restart}>다시 학습</button>
 				{/if}
 			</div>

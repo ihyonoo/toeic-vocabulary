@@ -60,19 +60,24 @@ function withFirstRound(s: SessionState): SessionState {
 
 export function createSession(
 	words: SessionWord[],
-	opts: { order: Order; repeat: Repeat },
+	opts: { order: Order; repeat: Repeat; startId?: number },
 	rng: Rng = Math.random
 ): SessionState {
-	const base = sortBase(words, opts.order);
+	const { order, repeat } = opts;
+	const base = sortBase(words, order);
 	if (base.length === 0) {
-		return { ...opts, base, rounds: [], round: 0, index: 0, status: 'empty', firstRoundFinished: false };
+		return { order, repeat, base, rounds: [], round: 0, index: 0, status: 'empty', firstRoundFinished: false };
 	}
+	const first = makeRound({ order, base }, rng);
+	// 카드 보기는 목록에서 누른 단어부터 시작한다
+	const index = Math.max(0, opts.startId === undefined ? 0 : first.indexOf(opts.startId));
 	const s: SessionState = {
-		...opts,
+		order,
+		repeat,
 		base,
-		rounds: [makeRound({ order: opts.order, base }, rng)],
+		rounds: [first],
 		round: 0,
-		index: 0,
+		index,
 		status: 'active',
 		firstRoundFinished: false
 	};
