@@ -16,7 +16,9 @@
 
 ## 문서
 
-- 요구사항 `docs/prd/`, 설계 `docs/trd/`, 진행 상황 `docs/progress/` (같은 slug)
+- 요구사항 `docs/prd/`, 설계 `docs/trd/`, 이후 변경의 설계 메모 `docs/design/`, 진행 상황 `docs/progress/`
+- 설계 메모가 PRD·TRD와 다르면 메모가 우선한다 (PRD·TRD 머리말에 표시)
+- 진행 상황은 `docs/progress/2026-10-07-toeic-vocab-app.md` 하나에 이어 쓴다
 - 단어 등록 절차는 `README.md`의 "단어 등록"
 
 ## 규칙
@@ -28,6 +30,7 @@
 - 스키마 변경은 `db.ts`의 `MIGRATIONS`에 버전을 추가한다. 기존 항목을 고치지 마라
 - 학습 진행 로직은 `src/lib/domain/session.ts` 순수 함수로 두고 단위 테스트로 고정한다
 - 단위 테스트는 `openDb(':memory:')`로 실제 DB를 쓴다. mock을 쓰지 마라
+- 예외: 마이그레이션 테스트는 이전 버전 DB를 만들어야 해서 임시 파일 DB를 쓴다 (`tests/unit/db-migrate.test.ts`)
 - 제스처 임계값과 카드 넘김 시간은 `src/lib/components/gesture.ts` 상수만 고친다
 - 로그인이 필요한 화면은 `src/routes/(app)/` 아래에 둔다. 화면 인증은 그 그룹의 `+layout.server.ts`가 한다
 - 테스트에 학원 단어를 쓰지 마라. 합성 단어(`word001`)나 일상 단어를 쓴다

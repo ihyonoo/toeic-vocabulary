@@ -2,11 +2,12 @@
 
 토익 학원에서 종이로 받은 단어를 아이폰에서 외우는 1인용 웹앱입니다.
 
-- Day별 단어 목록, 영어만/뜻만/둘 다 보기와 가린 칸 터치
-- 카드 학습: 교재순·랜덤·알파벳순, 반복 1·2·3회·계속, 좌우로 밀어 넘기기, 눌러서 예문 보기
+- Day별 단어 목록: 수업 단어(학원 종이)와 내 단어(직접 정리) 두 묶음, 영어만/뜻만/둘 다 보기와 가린 칸 터치
+- 목록에서 단어를 누르면 그 단어부터 카드로 넘겨 보기 (학습 기록에는 남지 않음)
+- 카드 학습: 교재순·랜덤·알파벳순, 반복 1·2·3회·계속, 묶음 선택, 좌우로 밀어 넘기기, 눌러서 예문 보기
 - 북마크, 숨기기(이미 아는 단어), 통합 학습, 북마크 학습
 
-요구사항과 설계는 `docs/prd/`, `docs/trd/`에 있습니다.
+요구사항과 설계는 `docs/prd/`, `docs/trd/`, 이후 변경은 `docs/design/`에 있습니다.
 
 ## 준비
 
@@ -39,26 +40,35 @@ npm start
 
 종이 사진을 Claude Code 대화에 첨부하면 Claude가 아래 절차로 등록합니다.
 
-1. 종이 순서대로 `data/import/dayNN.json`을 만든다
+1. 묶음을 정한다
+   - 학원이 나눠 준 인쇄물이면 수업 단어(`"section": "class"`, 생략 가능)
+   - 사용자가 직접 정리한 노트면 내 단어(`"section": "mine"`)
+   - 애매하면 사용자에게 묻는다
+2. 종이 순서대로 `data/import/dayNN.json`을 만든다
    ```json
-   { "day": 2, "words": [{ "english": "technician", "meaning": "기술자", "pos": "명사", "example": "...", "exampleKo": "..." }] }
+   { "day": 2, "section": "mine", "words": [{ "english": "apple", "meaning": "사과", "pos": "명사", "example": "...", "exampleKo": "..." }] }
    ```
    - 품사: 숙어·구는 `구`, 뜻 항목의 품사가 다르면 `동사, 명사`처럼 뜻 순서대로
    - 종이에서 겹치는 줄도 그대로 넣는다. 중복은 서버가 처리한다
-2. Day 번호는 사용자가 정한 번호, 없으면 `GET /api/days`의 가장 큰 번호 + 1
-3. 등록한다
+3. Day 번호를 정한다
+   - 수업 단어: 사용자가 정한 번호, 없으면 `GET /api/days`의 가장 큰 번호 + 1
+   - 내 단어: 매번 사용자에게 번호를 묻는다 (기본값 없음)
+4. 등록한다
    ```
    set -a; source .env; set +a
    curl -sS -X POST "$ORIGIN/api/days" -H "Authorization: Bearer $APP_PASSWORD" \
      -H 'content-type: application/json' --data @data/import/dayNN.json
    ```
-4. 응답을 종이와 대조해 사용자에게 보고한다
-   - `created + linked + skipped` = 종이 줄 수
-   - `created + linked` = 고유 단어 수
-5. 고칠 때
+5. 응답을 종이와 대조해 사용자에게 보고한다
+   - `created + linked + skipped + moved` = 종이 줄 수
+   - `created + linked + moved` = 고유 단어 수
+   - `moved`: 같은 Day의 내 단어였다가 종이에 나와 수업 단어로 옮긴 단어. 사용자에게 알린다
+6. 고칠 때
+   - 단어 id 찾기: `GET /api/days/{n}` (묶음과 id가 담긴 단어 목록)
    - 예문·품사: `PATCH /api/words/{id}`
+   - 묶음을 잘못 넣었을 때: `PATCH /api/days/{n}/words/{id}` 본문 `{ "section": "class" | "mine" }`
    - Day를 잘못 넣었을 때: `DELETE /api/days/{n}` 뒤 다시 등록
-     - 그 Day의 학습 기록과, 그 Day에만 있던 단어의 북마크·숨김도 함께 지워진다. 학습을 시작하기 전에만 쓴다
+     - 그 Day의 내 단어와 학습 기록, 그 Day에만 있던 단어의 북마크·숨김도 함께 지워진다. 학습을 시작하기 전에만 쓴다
 
 ## 테스트
 
