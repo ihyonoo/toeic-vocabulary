@@ -1,4 +1,4 @@
-import type { Word, WordPatch } from '$lib/domain/types';
+import type { DayWord, Word, WordPatch } from '$lib/domain/types';
 
 export class ApiError extends Error {
 	constructor(
@@ -31,7 +31,7 @@ export const api = {
 		request<{ word: Word }>('PATCH', `/api/words/${id}`, patch),
 	deleteWord: (id: number) => request<void>('DELETE', `/api/words/${id}`),
 	addWord: (day: number, input: { english: string; meaning: string }) =>
-		request<{ word: Word; result: 'created' | 'linked' }>('POST', `/api/days/${day}/words`, input),
+		request<{ word: DayWord; result: 'created' | 'linked' }>('POST', `/api/days/${day}/words`, input),
 	recordStudy: (day: number) =>
 		request<{ studyCount: number; lastStudiedOn: string }>('POST', `/api/days/${day}/study-log`)
 };

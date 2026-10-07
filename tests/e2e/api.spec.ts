@@ -107,3 +107,58 @@ test.describe('등록 API (R-4, R-5)', () => {
 		expect(days.find((d) => d.number === 104)?.wordCount).toBe(2);
 	});
 });
+
+test.describe('묶음 API (내 단어)', () => {
+	test('mine으로 등록하고, 종이 등록이 같은 Day의 내 단어를 옮기면 moved로 알린다', async ({ request }) => {
+		const mine = await request.post('/api/days', {
+			headers: AUTH,
+			data: { day: 901, section: 'mine', words: [{ english: 'lamp901', meaning: '등' }] }
+		});
+		expect((await mine.json()).moved).toEqual([]);
+
+		const paper = await request.post('/api/days', {
+			headers: AUTH,
+			data: { day: 901, words: [{ english: 'lamp901', meaning: '등' }, { english: 'desk901', meaning: '책상' }] }
+		});
+		const body = await paper.json();
+		expect(body.moved.map((w: { english: string }) => w.english)).toEqual(['lamp901']);
+		expect(body.created.map((w: { english: string }) => w.english)).toEqual(['desk901']);
+	});
+
+	test('section이 잘못되면 400이다', async ({ request }) => {
+		const res = await request.post('/api/days', {
+			headers: AUTH,
+			data: { day: 902, section: 'other', words: [{ english: 'x902', meaning: '엑스' }] }
+		});
+		expect(res.status()).toBe(400);
+	});
+
+	test('Day 단어 조회는 묶음과 id를 담고, 묶음을 바꿀 수 있다', async ({ request }) => {
+		await request.post('/api/days', {
+			headers: AUTH,
+			data: { day: 903, words: [{ english: 'cup903', meaning: '컵' }] }
+		});
+		await request.post('/api/days', {
+			headers: AUTH,
+			data: { day: 903, section: 'mine', words: [{ english: 'pen903', meaning: '펜' }] }
+		});
+
+		const got = await request.get('/api/days/903', { headers: AUTH });
+		expect(got.status()).toBe(200);
+		const { day, words } = await got.json();
+		expect(day).toBe(903);
+		expect(words.map((w: { english: string; section: string }) => `${w.section}:${w.english}`)).toEqual([
+			'class:cup903',
+			'mine:pen903'
+		]);
+
+		const cup = words[0].id;
+		const moved = await request.patch(`/api/days/903/words/${cup}`, { headers: AUTH, data: { section: 'mine' } });
+		expect(moved.status()).toBe(200);
+		expect((await moved.json()).word).toMatchObject({ english: 'cup903', section: 'mine' });
+
+		expect((await request.patch(`/api/days/903/words/${cup}`, { headers: AUTH, data: { section: 'x' } })).status()).toBe(400);
+		expect((await request.patch(`/api/days/904/words/${cup}`, { headers: AUTH, data: { section: 'mine' } })).status()).toBe(404);
+		expect((await request.get('/api/days/904', { headers: AUTH })).status()).toBe(404);
+	});
+});

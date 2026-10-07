@@ -1,3 +1,8 @@
+// class: 학원이 나눠 준 종이 단어
+// mine: 사용자가 정리한 단어
+export type Section = 'class' | 'mine';
+export type StudyGroup = 'all' | Section;
+
 export type Word = {
 	id: number;
 	english: string;
@@ -7,7 +12,12 @@ export type Word = {
 	exampleKo: string;
 	bookmarked: boolean;
 	hidden: boolean;
+	// 지금 속한 묶음들, ['class', 'mine'] 순서
+	sections: Section[];
 };
+
+// 그 Day에서의 묶음
+export type DayWord = Word & { section: Section };
 
 export type DaySummary = {
 	number: number;
@@ -28,13 +38,15 @@ export type ImportItem = {
 	exampleKo?: string;
 };
 
-export type ImportInput = { day: number; words: ImportItem[] };
+export type ImportInput = { day: number; section?: Section; words: ImportItem[] };
 
 export type ImportResult = {
 	day: number;
 	created: WordRef[];
 	linked: WordRef[];
 	skipped: WordRef[];
+	// 같은 Day의 내 단어였다가 종이 등록으로 수업 단어가 된 것
+	moved: WordRef[];
 };
 
 export type WordPatch = Partial<

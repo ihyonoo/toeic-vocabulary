@@ -38,8 +38,15 @@ CREATE TABLE study_logs (
 CREATE INDEX study_logs_day ON study_logs(day_number);
 `;
 
+// 내 단어 묶음 (docs/design/2026-10-08-my-words.md)
+const SCHEMA_V2 = `
+ALTER TABLE day_words ADD COLUMN section TEXT NOT NULL DEFAULT 'class'
+  CHECK (section IN ('class', 'mine'));
+`;
+
 // 인덱스 i가 버전 i → i+1 마이그레이션
-const MIGRATIONS = [SCHEMA_V1];
+// 테스트가 이전 버전 DB를 만들 수 있게 내보낸다
+export const MIGRATIONS = [SCHEMA_V1, SCHEMA_V2];
 
 function migrate(db: DatabaseSync) {
 	const row = db.prepare('PRAGMA user_version').get() as { user_version: number };

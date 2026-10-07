@@ -1,4 +1,11 @@
+<script lang="ts" module>
+	// 열린 밀기 메뉴를 닫은 탭이 다른 목록(수업·내 단어)의 카드 보기로 이어지지 않게 두 목록이 함께 본다
+	let menuClosedAt = -Infinity;
+</script>
+
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { TAP_MAX_MS } from './gesture';
 	import type { Word } from '$lib/domain/types';
 	import { ApiError, api } from '$lib/client/api';
 	import { toggleFlag } from '$lib/client/flags';
@@ -7,7 +14,10 @@
 	import WordFormSheet from './WordFormSheet.svelte';
 	import WordRow from './WordRow.svelte';
 
-	let { words = $bindable() }: { words: Word[] } = $props();
+	let {
+		words = $bindable(),
+		cardHref
+	}: { words: Word[]; cardHref?: (word: Word) => string } = $props();
 
 	let openId = $state<number | null>(null);
 	let editing = $state<Word | null>(null);
@@ -68,7 +78,16 @@
 
 	// 다른 곳을 누르거나 스크롤하면 열린 행을 닫는다
 	function onpointerdown(e: PointerEvent) {
-		if (openId !== null && !(e.target as HTMLElement).closest('[data-row-open]')) openId = null;
+		if (openId !== null && !(e.target as HTMLElement).closest('[data-row-open]')) {
+			openId = null;
+			menuClosedAt = performance.now();
+		}
+	}
+
+	// 메뉴를 닫은 바로 그 탭이면 카드 보기로 가지 않는다
+	function openCard(word: Word) {
+		if (!cardHref || performance.now() - menuClosedAt < TAP_MAX_MS) return;
+		goto(cardHref(word), { state: { fromList: true } });
 	}
 </script>
 
@@ -88,6 +107,7 @@
 				toggle(word, 'hidden');
 			}}
 			onedit={() => openEdit(word)}
+			onopencard={cardHref ? () => openCard(word) : undefined}
 			ondelete={() => {
 				openId = null;
 				deleting = word;

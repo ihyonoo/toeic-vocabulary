@@ -176,6 +176,6 @@ describe('countStudyableWords', () => {
 		importDay(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }, { english: 'cotton', meaning: '면' }] });
 		db.prepare("UPDATE words SET hidden = 1 WHERE english = 'cotton'").run();
 
-		expect(countStudyableWords(db)).toBe(2);
+		expect(countStudyableWords(db)).toEqual({ all: 2, class: 2, mine: 0 });
 	});
 });

@@ -5,8 +5,13 @@ export const AUTH = { Authorization: `Bearer ${E2E_PASSWORD}` };
 
 export type Item = { english: string; meaning: string; pos?: string; example?: string; exampleKo?: string };
 
-export async function seedDay(request: APIRequestContext, day: number, words: Item[]) {
-	const res = await request.post('/api/days', { headers: AUTH, data: { day, words } });
+export async function seedDay(
+	request: APIRequestContext,
+	day: number,
+	words: Item[],
+	section: 'class' | 'mine' = 'class'
+) {
+	const res = await request.post('/api/days', { headers: AUTH, data: { day, section, words } });
 	expect(res.status()).toBe(200);
 	return res.json();
 }
