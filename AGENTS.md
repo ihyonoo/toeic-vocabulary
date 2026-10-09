@@ -8,7 +8,7 @@
 |---|---|
 | 타입 검사 | `npm run check` |
 | 단위 테스트 | `npm run test:unit` |
-| E2E | `npm run test:e2e` (빌드 후 4173 포트, `test-results/e2e.db`) |
+| E2E | `npm run test:e2e` (빌드 후 4173 포트, `test-results/e2e.db`, 가짜 OpenAI 4174 포트) |
 | 개발 서버 | `npm run dev` |
 | 실행 | `npm run build && npm start` (`.env` 필요) |
 
@@ -18,8 +18,9 @@
 
 - 요구사항 `docs/prd/`, 설계 `docs/trd/`, 이후 변경의 설계 메모 `docs/design/`, 진행 상황 `docs/progress/`
 - 설계 메모가 PRD·TRD와 다르면 메모가 우선한다 (PRD·TRD 머리말에 표시)
+- 사진 등록은 `docs/prd/2026-10-09-photo-import.md`, `docs/trd/2026-10-09-photo-import.md`
 - 진행 상황은 `docs/progress/2026-10-07-toeic-vocab-app.md` 하나에 이어 쓴다
-- 단어 등록 절차는 `README.md`의 "단어 등록"
+- 등록 절차는 `README.md`의 "사진으로 등록 (앱)"과 "단어 등록 (Claude Code)"
 
 ## 규칙
 
@@ -31,6 +32,9 @@
 - 학습 진행 로직은 `src/lib/domain/session.ts` 순수 함수로 두고 단위 테스트로 고정한다
 - 단위 테스트는 `openDb(':memory:')`로 실제 DB를 쓴다. mock을 쓰지 마라
 - 예외: 마이그레이션 테스트는 이전 버전 DB를 만들어야 해서 임시 파일 DB를 쓴다 (`tests/unit/db-migrate.test.ts`)
+- 테스트는 실제 OpenAI를 부르지 마라. 가짜 서버 `tests/support/fake-openai.mjs`를 쓴다
+  - 단위: `startFakeOpenAI()`의 주소를 `extractWords`·`startImport`의 `baseURL`로 넘긴다. vitest의 `$env`에는 `.env`의 실제 키가 들어 있다
+  - E2E: `POST {FAKE_OPENAI}/__scenario`로 응답을 정한다. 시나리오는 다음 설정까지 유지된다(SDK 재시도도 같은 응답)
 - 제스처 임계값과 카드 넘김 시간은 `src/lib/components/gesture.ts` 상수만 고친다
 - 로그인이 필요한 화면은 `src/routes/(app)/` 아래에 둔다. 화면 인증은 그 그룹의 `+layout.server.ts`가 한다
 - 테스트에 학원 단어를 쓰지 마라. 합성 단어(`word001`)나 일상 단어를 쓴다
@@ -45,3 +49,5 @@
 - 전역 `ssr = false`다. 보기 모드가 localStorage에만 있어 SSR하면 가린 칸이 잠깐 드러난다
 - Playwright에는 터치 밀기 API가 없다. E2E의 밀기는 `page.mouse` 드래그, 실제 터치는 실기기로 확인한다
 - E2E는 DB를 공유한다. 테스트마다 다른 Day 번호를 쓴다
+- 사진 등록의 백그라운드 처리(`runImport`)는 아무도 기다리지 않는다. 예외를 새게 두면 처리되지 않은 거부로 서버가 꺼진다
+- 묶음 칩 라디오는 라벨이 덮고 있다. E2E에서는 `check()` 대신 라벨 글자를 누른다

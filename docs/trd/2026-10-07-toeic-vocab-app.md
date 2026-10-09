@@ -5,6 +5,8 @@
 - PRD: `docs/prd/2026-10-07-toeic-vocab-app.md`
 
 > **10-08 변경:** 내 단어 묶음(`day_words.section`, 스키마 v2)과 카드 보기(`/study?mode=browse`)의 데이터 모델·인터페이스는 `docs/design/2026-10-08-my-words.md`를 따른다. 이 문서와 다르면 메모가 우선한다. 9장 등록 절차는 README가 최신이다.
+>
+> **10-09 변경:** 사진 등록(초안 테이블, 스키마 v3, `/api/imports`, OpenAI 호출)은 `docs/trd/2026-10-09-photo-import.md`를 따른다.
 
 ## 1. 개요
 
