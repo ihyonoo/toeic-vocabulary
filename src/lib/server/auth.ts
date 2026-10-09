@@ -13,8 +13,11 @@ function sameSecret(given: string, expected: string): boolean {
 	return timingSafeEqual(digest('compare', given), digest('compare', expected));
 }
 
-export function sessionToken(password: string): string {
-	return digest(password, 'vocab-session-v1').toString('hex');
+// 서버만 아는 비밀값으로 서명한다
+// 비밀번호만으로 계산되면 쿠키로 비밀번호를 맞혀 보며 로그인 제한을 우회할 수 있다
+// 비밀번호를 바꾸면 기존 쿠키는 무효가 된다
+export function sessionToken(password: string, secret: string): string {
+	return digest(secret, `vocab-session-v2:${password}`).toString('hex');
 }
 
 export function checkPassword(given: string, password: string): boolean {
@@ -23,10 +26,11 @@ export function checkPassword(given: string, password: string): boolean {
 
 export function isAuthorized(
 	req: { cookie: string | undefined; authorization: string | null },
-	password: string
+	keys: { password: string; secret: string }
 ): boolean {
+	const { password, secret } = keys;
 	if (!password) return false;
-	if (req.cookie && sameSecret(req.cookie, sessionToken(password))) return true;
+	if (secret && req.cookie && sameSecret(req.cookie, sessionToken(password, secret))) return true;
 	const match = req.authorization?.match(/^Bearer (.+)$/);
 	return match ? sameSecret(match[1], password) : false;
 }

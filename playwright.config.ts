@@ -12,6 +12,9 @@ export default defineConfig({
 	reporter: 'list',
 	use: {
 		baseURL: `http://localhost:${PORT}`,
+		// 로그인 제한이 IP마다 세므로 기본 IP를 준다
+		// 제한 테스트만 다른 IP를 쓴다
+		extraHTTPHeaders: { 'x-forwarded-for': '203.0.113.1' },
 		trace: 'retain-on-failure'
 	},
 	projects: [{ name: 'iphone-webkit', use: { ...devices['iPhone 15'] } }],
@@ -30,10 +33,12 @@ export default defineConfig({
 				PORT: String(PORT),
 				ORIGIN: `http://localhost:${PORT}`,
 				APP_PASSWORD: E2E_PASSWORD,
+				SESSION_SECRET: 'e2e-session-secret-at-least-32-characters',
 				DATABASE_PATH: 'test-results/e2e.db',
 				OPENAI_API_KEY: 'e2e-key',
 				OPENAI_BASE_URL: `${FAKE_OPENAI}/v1`,
-				BODY_SIZE_LIMIT: '20M'
+				BODY_SIZE_LIMIT: '20M',
+				ADDRESS_HEADER: 'x-forwarded-for'
 			}
 		}
 	]

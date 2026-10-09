@@ -19,22 +19,37 @@ describe('checkPassword', () => {
 });
 
 describe('isAuthorized', () => {
+	const SECRET = 'server-only-secret';
+	const keys = { password: PASSWORD, secret: SECRET };
+
 	it('세션 쿠키가 맞으면 통과한다', () => {
-		expect(isAuthorized({ cookie: sessionToken(PASSWORD), authorization: null }, PASSWORD)).toBe(true);
+		expect(isAuthorized({ cookie: sessionToken(PASSWORD, SECRET), authorization: null }, keys)).toBe(true);
 	});
 
 	it('다른 비밀번호로 만든 쿠키는 통과하지 못한다', () => {
-		expect(isAuthorized({ cookie: sessionToken('old password'), authorization: null }, PASSWORD)).toBe(false);
+		expect(isAuthorized({ cookie: sessionToken('old password', SECRET), authorization: null }, keys)).toBe(false);
+	});
+
+	// 저장소가 공개라 계산법이 알려져 있다
+	// 비밀값 없이 비밀번호만으로 쿠키를 만들 수 있으면 로그인 제한을 우회해 비밀번호를 맞혀 본다
+	it('비밀번호를 알아도 서버 비밀값이 다르면 쿠키를 만들 수 없다', () => {
+		expect(isAuthorized({ cookie: sessionToken(PASSWORD, 'guessed'), authorization: null }, keys)).toBe(false);
+		expect(isAuthorized({ cookie: sessionToken(PASSWORD, ''), authorization: null }, keys)).toBe(false);
+	});
+
+	it('서버 비밀값이 비어 있으면 쿠키로 통과하지 못한다', () => {
+		const noSecret = { password: PASSWORD, secret: '' };
+		expect(isAuthorized({ cookie: sessionToken(PASSWORD, ''), authorization: null }, noSecret)).toBe(false);
 	});
 
 	it('Bearer 토큰이 비밀번호와 같으면 통과한다', () => {
-		expect(isAuthorized({ cookie: undefined, authorization: `Bearer ${PASSWORD}` }, PASSWORD)).toBe(true);
+		expect(isAuthorized({ cookie: undefined, authorization: `Bearer ${PASSWORD}` }, keys)).toBe(true);
 	});
 
 	it('Bearer 토큰이 틀리거나 형식이 다르면 통과하지 못한다', () => {
-		expect(isAuthorized({ cookie: undefined, authorization: 'Bearer nope' }, PASSWORD)).toBe(false);
-		expect(isAuthorized({ cookie: undefined, authorization: PASSWORD }, PASSWORD)).toBe(false);
-		expect(isAuthorized({ cookie: undefined, authorization: null }, PASSWORD)).toBe(false);
+		expect(isAuthorized({ cookie: undefined, authorization: 'Bearer nope' }, keys)).toBe(false);
+		expect(isAuthorized({ cookie: undefined, authorization: PASSWORD }, keys)).toBe(false);
+		expect(isAuthorized({ cookie: undefined, authorization: null }, keys)).toBe(false);
 	});
 });
 
