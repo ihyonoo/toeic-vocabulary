@@ -1,0 +1,85 @@
+# 테스트 → 이미지 빌드 → devserver 배포 (docs/design/2026-10-10-devserver-deploy.md)
+name: CI and Deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# main 실행은 하나씩 순서대로 돈다
+# 빌드가 뒤집히면 latest 태그가 옛 커밋을 가리킨다
+# PR은 새 커밋이 오면 이전 실행을 취소한다
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/ihyonoo/toeic-vocabulary
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:unit
+
+  build:
+    needs: test
+    # 배포 스크립트는 main의 커밋만 받는다
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          # 패키지를 이 저장소에 연결한다
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    # 서버 준비가 끝나면 저장소 변수 DEPLOY_READY를 true로 둔다
+    if: vars.DEPLOY_READY == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Join tailnet
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          version: latest
+
+      - name: Load deploy-only SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust deploy server host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p 22 "${{ secrets.DEPLOY_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Run remote deploy
+        # 서버의 forced-command(deploy/ci-deploy.sh)가 실행 명령을 고정하고 SHA를 검증한다
+        run: ssh -o BatchMode=yes "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" "${{ github.sha }}"

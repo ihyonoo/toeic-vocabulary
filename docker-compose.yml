@@ -1,0 +1,42 @@
+# devserver 배포 (docs/design/2026-10-10-devserver-deploy.md)
+# 값은 같은 폴더의 .env에서 읽는다
+# 이미지 태그는 deploy/ci-deploy.sh가 DEPLOY_IMAGE_TAG로 정한다
+services:
+  vocabulary:
+    image: ghcr.io/ihyonoo/toeic-vocabulary:${DEPLOY_IMAGE_TAG:-latest}
+    container_name: vocabulary
+    restart: unless-stopped
+    # 터널 토큰이 앱에 들어가지 않게 필요한 값만 넘긴다
+    # 필수 값이 빠지면 빈 문자열로 조용히 동작하지 않고 compose up이 실패한다
+    environment:
+      ORIGIN: ${ORIGIN:?.env에 ORIGIN이 필요하다}
+      APP_PASSWORD: ${APP_PASSWORD:?.env에 APP_PASSWORD가 필요하다}
+      SESSION_SECRET: ${SESSION_SECRET:?.env에 SESSION_SECRET이 필요하다}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:?.env에 BODY_SIZE_LIMIT이 필요하다}
+      ADDRESS_HEADER: ${ADDRESS_HEADER:?.env에 ADDRESS_HEADER가 필요하다}
+    volumes:
+      - ./data:/app/data
+    # 앱 포트는 호스트에 열지 않는다
+    # 터널이 같은 네트워크에서 vocabulary:3000으로 들어온다
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/login').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+
+  # 서버에서 cloudflared 명령으로 만든 터널이다 (README "배포")
+  # ./cloudflared에 config.yml과 터널 인증서 JSON이 있다
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vocabulary-cloudflared
+    restart: unless-stopped
+    # 인증서 JSON이 서버 사용자(uid 1000) 전용 권한이라 같은 uid로 읽는다
+    user: '1000:1000'
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - vocabulary

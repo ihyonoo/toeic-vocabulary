@@ -19,6 +19,7 @@
 - 요구사항 `docs/prd/`, 설계 `docs/trd/`, 이후 변경의 설계 메모 `docs/design/`, 진행 상황 `docs/progress/`
 - 설계 메모가 PRD·TRD와 다르면 메모가 우선한다 (PRD·TRD 머리말에 표시)
 - 사진 등록은 `docs/prd/2026-10-09-photo-import.md`, `docs/trd/2026-10-09-photo-import.md`
+- 배포는 `docs/design/2026-10-10-devserver-deploy.md`, 절차는 README "배포"
 - 진행 상황은 `docs/progress/2026-10-07-toeic-vocab-app.md` 하나에 이어 쓴다
 - 등록 절차는 `README.md`의 "사진으로 등록 (앱)"과 "단어 등록 (Claude Code)"
 
@@ -29,6 +30,7 @@
 - 앱 코드의 DB 접근은 `src/lib/server/repo.ts`에만 둔다. 여러 문장이면 `tx()`로 감싼다
 - 단위 테스트는 상태를 만들거나 확인할 때 `db.prepare`로 SQL을 직접 써도 된다
 - 스키마 변경은 `db.ts`의 `MIGRATIONS`에 버전을 추가한다. 기존 항목을 고치지 마라
+  - 배포 DB는 마이그레이션을 되돌릴 수 없고 백업도 없다. 머지 전에 서버 DB 사본으로 마이그레이션을 확인한다
 - 학습 진행 로직은 `src/lib/domain/session.ts` 순수 함수로 두고 단위 테스트로 고정한다
 - 단위 테스트는 `openDb(':memory:')`로 실제 DB를 쓴다. mock을 쓰지 마라
 - 예외: 마이그레이션 테스트는 이전 버전 DB를 만들어야 해서 임시 파일 DB를 쓴다 (`tests/unit/db-migrate.test.ts`)
@@ -51,3 +53,7 @@
 - E2E는 DB를 공유한다. 테스트마다 다른 Day 번호를 쓴다
 - 사진 등록의 백그라운드 처리(`runImport`)는 아무도 기다리지 않는다. 예외를 새게 두면 처리되지 않은 거부로 서버가 꺼진다
 - 묶음 칩 라디오는 라벨이 덮고 있다. E2E에서는 `check()` 대신 라벨 글자를 누른다
+- 실제 단어 DB는 devserver에 있다. Claude Code 등록·수정 API는 `https://voca.hwchoi.com`으로 보낸다. Mac `data/`는 개발 DB다
+- `event.getClientAddress()`는 비밀번호를 확인하는 요청(로그인 API, `Authorization`이 있는 요청)에서만 불러라. 배포는 `ADDRESS_HEADER=cf-connecting-ip`라 이 헤더가 없는 요청(healthcheck)에서 부르면 500이 난다
+- E2E는 `ADDRESS_HEADER=x-forwarded-for`로 돈다. 로그인을 막는 테스트는 기본과 다른 IP를 써라
+- `deploy/ci-deploy.sh`는 배포 키의 forced-command다. 실행 비트를 지키고, 함수로 감싼 구조(마지막 줄에서만 호출)를 바꾸지 마라
