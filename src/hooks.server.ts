@@ -2,14 +2,18 @@ import type { Handle, ServerInit } from '@sveltejs/kit';
 import { building, dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import { SESSION_COOKIE, isAuthorized } from '$lib/server/auth';
+import { getDb } from '$lib/server/db';
 import { appPassword } from '$lib/server/env';
 import { apiError } from '$lib/server/http';
+import { failInterruptedDrafts } from '$lib/server/repo';
 
 export const init: ServerInit = () => {
 	if (building) return;
 	if (!env.APP_PASSWORD) throw new Error('APP_PASSWORD 환경 변수가 없습니다');
 	// ORIGIN이 없으면 adapter-node가 HTTP 요청을 https로 판정한다
 	if (!dev && !env.ORIGIN) throw new Error('ORIGIN 환경 변수가 없습니다');
+	// 지난 실행에서 처리 중이던 사진 등록은 이어 갈 수 없다
+	failInterruptedDrafts(getDb());
 };
 
 export const handle: Handle = async ({ event, resolve }) => {

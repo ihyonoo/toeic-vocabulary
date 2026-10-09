@@ -57,3 +57,33 @@ export type Order = 'textbook' | 'random' | 'alpha';
 export type Repeat = 1 | 2 | 3 | 'loop';
 export type ViewMode = 'both' | 'english' | 'meaning';
 export type StudyScope = 'day' | 'all' | 'bookmarks';
+
+// 사진 등록 초안 (docs/trd/2026-10-09-photo-import.md)
+export type DraftStatus = 'processing' | 'ready' | 'failed';
+
+export type DraftItem = {
+	english: string;
+	meaning: string;
+	pos: string;
+	example: string;
+	exampleKo: string;
+	// AI가 철자를 고쳤을 때 종이의 철자, 아니면 null
+	paperEnglish: string | null;
+	// 종이에 뜻이 없어 AI가 채웠는가
+	meaningFilled: boolean;
+};
+
+export type DraftSummary = {
+	id: number;
+	day: number;
+	section: Section;
+	status: DraftStatus;
+	itemCount: number;
+	// failed일 때 사용자에게 보일 이유
+	error: string | null;
+	createdAt: string;
+};
+
+export type Draft = DraftSummary & { items: DraftItem[] };
+
+export type DraftInput = { day: number; section: Section; items: DraftItem[] };

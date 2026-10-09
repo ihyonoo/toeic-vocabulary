@@ -44,9 +44,26 @@ ALTER TABLE day_words ADD COLUMN section TEXT NOT NULL DEFAULT 'class'
   CHECK (section IN ('class', 'mine'));
 `;
 
+// 사진 등록 초안 (docs/trd/2026-10-09-photo-import.md)
+// 아직 없는 Day일 수 있어 day_number에 FK를 두지 않는다
+// 사진은 저장하지 않는다
+const SCHEMA_V3 = `
+CREATE TABLE drafts (
+  id          INTEGER PRIMARY KEY,
+  day_number  INTEGER NOT NULL CHECK (day_number >= 1),
+  section     TEXT NOT NULL CHECK (section IN ('class', 'mine')),
+  status      TEXT NOT NULL CHECK (status IN ('processing', 'ready', 'failed')),
+  photo_count INTEGER NOT NULL,
+  items       TEXT NOT NULL DEFAULT '[]',
+  error       TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+`;
+
 // 인덱스 i가 버전 i → i+1 마이그레이션
 // 테스트가 이전 버전 DB를 만들 수 있게 내보낸다
-export const MIGRATIONS = [SCHEMA_V1, SCHEMA_V2];
+export const MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3];
 
 function migrate(db: DatabaseSync) {
 	const row = db.prepare('PRAGMA user_version').get() as { user_version: number };

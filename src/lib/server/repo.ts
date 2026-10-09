@@ -3,6 +3,10 @@ import { englishKey, normalizeEnglish, normalizeMeaning } from '$lib/domain/norm
 import type {
 	DaySummary,
 	DayWord,
+	Draft,
+	DraftInput,
+	DraftItem,
+	DraftSummary,
 	ImportInput,
 	ImportItem,
 	ImportResult,
@@ -19,7 +23,9 @@ export type RepoErrorCode =
 	| 'day_not_found'
 	| 'word_not_found'
 	| 'already_in_day'
-	| 'duplicate_word';
+	| 'duplicate_word'
+	| 'draft_not_found'
+	| 'draft_not_ready';
 
 export class RepoError extends Error {
 	constructor(
@@ -157,54 +163,61 @@ function cleanImport(input: unknown): { day: number; section: Section; words: Cl
 }
 
 export function importDay(db: DatabaseSync, input: ImportInput): ImportResult {
-	const { day, section, words } = cleanImport(input);
+	const clean = cleanImport(input);
+	return tx(db, () => importClean(db, clean));
+}
+
+// 트랜잭션 없이 실행한다
+// 초안 등록이 초안 삭제와 한 트랜잭션으로 묶는다
+function importClean(
+	db: DatabaseSync,
+	{ day, section, words }: { day: number; section: Section; words: CleanItem[] }
+): ImportResult {
 	const result: ImportResult = { day, created: [], linked: [], skipped: [], moved: [] };
 
-	tx(db, () => {
-		db.prepare('INSERT OR IGNORE INTO days (number, created_at) VALUES (?, ?)').run(day, now());
+	db.prepare('INSERT OR IGNORE INTO days (number, created_at) VALUES (?, ?)').run(day, now());
 
-		for (const item of words) {
-			const existing = findWord(db, item.english, item.meaning);
-			const current = existing && sectionInDay(db, day, existing.id);
-			if (existing && current === 'mine' && section === 'class') {
-				// 종이가 우선한다
-				// 내 단어였던 것을 이번 종이 순서 끝의 수업 단어로 옮긴다
-				db.prepare(
-					`UPDATE day_words SET section = 'class', position = (${NEXT_POSITION})
-					 WHERE day_number = ? AND word_id = ?`
-				).run(day, day, existing.id);
-				fillBlanks(db, existing.id, item);
-				result.moved.push(toRef(existing));
-				continue;
-			}
-			if (existing && current) {
-				result.skipped.push(toRef(existing));
-				continue;
-			}
-			if (existing) {
-				fillBlanks(db, existing.id, item);
-				appendToDay(db, day, existing.id, section);
-				result.linked.push(toRef(existing));
-				continue;
-			}
-			const created = db
-				.prepare(
-					`INSERT INTO words (english, english_key, meaning, pos, example, example_ko, created_at)
-					 VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
-				)
-				.get(
-					item.english,
-					englishKey(item.english),
-					item.meaning,
-					item.pos,
-					item.example,
-					item.exampleKo,
-					now()
-				) as { id: number };
-			appendToDay(db, day, created.id, section);
-			result.created.push({ id: created.id, english: item.english, meaning: item.meaning });
+	for (const item of words) {
+		const existing = findWord(db, item.english, item.meaning);
+		const current = existing && sectionInDay(db, day, existing.id);
+		if (existing && current === 'mine' && section === 'class') {
+			// 종이가 우선한다
+			// 내 단어였던 것을 이번 종이 순서 끝의 수업 단어로 옮긴다
+			db.prepare(
+				`UPDATE day_words SET section = 'class', position = (${NEXT_POSITION})
+				 WHERE day_number = ? AND word_id = ?`
+			).run(day, day, existing.id);
+			fillBlanks(db, existing.id, item);
+			result.moved.push(toRef(existing));
+			continue;
 		}
-	});
+		if (existing && current) {
+			result.skipped.push(toRef(existing));
+			continue;
+		}
+		if (existing) {
+			fillBlanks(db, existing.id, item);
+			appendToDay(db, day, existing.id, section);
+			result.linked.push(toRef(existing));
+			continue;
+		}
+		const created = db
+			.prepare(
+				`INSERT INTO words (english, english_key, meaning, pos, example, example_ko, created_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
+			)
+			.get(
+				item.english,
+				englishKey(item.english),
+				item.meaning,
+				item.pos,
+				item.example,
+				item.exampleKo,
+				now()
+			) as { id: number };
+		appendToDay(db, day, created.id, section);
+		result.created.push({ id: created.id, english: item.english, meaning: item.meaning });
+	}
 	return result;
 }
 
@@ -417,4 +430,169 @@ export function recordStudy(
 		const summary = listDays(db).find((d) => d.number === day)!;
 		return { studyCount: summary.studyCount, lastStudiedOn: summary.lastStudiedOn! };
 	});
+}
+
+// 사진 등록 초안 (docs/trd/2026-10-09-photo-import.md)
+
+type DraftRow = {
+	id: number;
+	day_number: number;
+	section: Section;
+	status: Draft['status'];
+	items: string;
+	error: string | null;
+	created_at: string;
+};
+
+const INTERRUPTED = '서버가 다시 시작돼 처리가 멈췄어요. 사진을 다시 올려 주세요.';
+
+function toDraft(row: DraftRow): Draft {
+	const items = JSON.parse(row.items) as DraftItem[];
+	return {
+		id: row.id,
+		day: row.day_number,
+		section: row.section,
+		status: row.status,
+		itemCount: items.length,
+		error: row.error,
+		createdAt: row.created_at,
+		items
+	};
+}
+
+function toSummary({ items: _, ...summary }: Draft): DraftSummary {
+	return summary;
+}
+
+function draftRow(db: DatabaseSync, id: number): DraftRow {
+	const row = db.prepare('SELECT * FROM drafts WHERE id = ?').get(id) as DraftRow | undefined;
+	if (!row) throw new RepoError('draft_not_found', '초안을 찾을 수 없어요.');
+	return row;
+}
+
+export function createDraft(
+	db: DatabaseSync,
+	input: { day: number; section: Section; photoCount: number }
+): DraftSummary {
+	const at = now();
+	const row = db
+		.prepare(
+			`INSERT INTO drafts (day_number, section, status, photo_count, created_at, updated_at)
+			 VALUES (?, ?, 'processing', ?, ?, ?) RETURNING *`
+		)
+		.get(input.day, input.section, input.photoCount, at, at) as DraftRow;
+	return toSummary(toDraft(row));
+}
+
+export function getDraft(db: DatabaseSync, id: number): Draft {
+	return toDraft(draftRow(db, id));
+}
+
+export function listDrafts(db: DatabaseSync): DraftSummary[] {
+	const rows = db.prepare('SELECT * FROM drafts ORDER BY created_at, id').all() as DraftRow[];
+	return rows.map((r) => toSummary(toDraft(r)));
+}
+
+// 등록된 Day와 아직 등록하지 않은 수업 단어 초안 중 가장 큰 번호 + 1 (R-47)
+export function nextClassDay(db: DatabaseSync): number {
+	const row = db
+		.prepare(
+			`SELECT MAX(n) AS max FROM (
+			   SELECT number AS n FROM days
+			   UNION ALL
+			   SELECT day_number FROM drafts WHERE section = 'class' AND status IN ('processing', 'ready'))`
+		)
+		.get() as { max: number | null };
+	return (row.max ?? 0) + 1;
+}
+
+// 처리 중인 초안만 바꾼다
+// 버렸거나 이미 실패한 초안이 되살아나지 않는다
+export function finishDraft(db: DatabaseSync, id: number, items: DraftItem[]) {
+	db.prepare(
+		`UPDATE drafts SET status = 'ready', items = ?, updated_at = ? WHERE id = ? AND status = 'processing'`
+	).run(JSON.stringify(items), now(), id);
+}
+
+export function failDraft(db: DatabaseSync, id: number, message: string) {
+	db.prepare(
+		`UPDATE drafts SET status = 'failed', error = ?, updated_at = ? WHERE id = ? AND status = 'processing'`
+	).run(message, now(), id);
+}
+
+export function failInterruptedDrafts(db: DatabaseSync): number {
+	const result = db
+		.prepare(`UPDATE drafts SET status = 'failed', error = ?, updated_at = ? WHERE status = 'processing'`)
+		.run(INTERRUPTED, now());
+	return Number(result.changes);
+}
+
+function isDraftItem(value: unknown): value is DraftItem {
+	const v = value as Record<string, unknown> | null;
+	return (
+		typeof v === 'object' &&
+		v !== null &&
+		['english', 'meaning', 'pos', 'example', 'exampleKo'].every((k) => typeof v[k] === 'string') &&
+		(v.paperEnglish === null || typeof v.paperEnglish === 'string') &&
+		typeof v.meaningFilled === 'boolean'
+	);
+}
+
+// 편집 중이라 빈 영어·뜻을 허용한다
+function cleanDraftInput(input: unknown): DraftInput {
+	const { day, section, items } = (input ?? {}) as Partial<DraftInput>;
+	if (!isPositiveInt(day)) throw new RepoError('invalid_request', 'Day 번호는 1 이상의 정수여야 해요.');
+	if (!isSection(section)) throw new RepoError('invalid_request', "section은 'class'나 'mine'이어야 해요.");
+	if (!Array.isArray(items) || !items.every(isDraftItem)) {
+		throw new RepoError('invalid_request', '단어 목록이 잘못됐어요.');
+	}
+	const cleaned = items.map((i) => ({
+		english: i.english,
+		meaning: i.meaning,
+		pos: i.pos,
+		example: i.example,
+		exampleKo: i.exampleKo,
+		paperEnglish: i.paperEnglish,
+		meaningFilled: i.meaningFilled
+	}));
+	return { day, section, items: cleaned };
+}
+
+function readyRow(db: DatabaseSync, id: number): DraftRow {
+	const row = draftRow(db, id);
+	if (row.status !== 'ready') throw new RepoError('draft_not_ready', '아직 확인할 수 있는 초안이 아니에요.');
+	return row;
+}
+
+export function saveDraft(db: DatabaseSync, id: number, input: unknown): Draft {
+	const { day, section, items } = cleanDraftInput(input);
+	return tx(db, () => {
+		readyRow(db, id);
+		db.prepare('UPDATE drafts SET day_number = ?, section = ?, items = ?, updated_at = ? WHERE id = ?').run(
+			day,
+			section,
+			JSON.stringify(items),
+			now(),
+			id
+		);
+		return getDraft(db, id);
+	});
+}
+
+// 저장된 items가 아니라 보낸 내용으로 등록한다
+// 마지막 저장 요청과 경쟁하지 않는다
+export function commitDraft(db: DatabaseSync, id: number, input: unknown): ImportResult {
+	const { day, section, items } = cleanDraftInput(input);
+	const clean = cleanImport({ day, section, words: items });
+	return tx(db, () => {
+		readyRow(db, id);
+		const result = importClean(db, clean);
+		db.prepare('DELETE FROM drafts WHERE id = ?').run(id);
+		return result;
+	});
+}
+
+export function deleteDraft(db: DatabaseSync, id: number) {
+	const result = db.prepare('DELETE FROM drafts WHERE id = ?').run(id);
+	if (Number(result.changes) === 0) throw new RepoError('draft_not_found', '초안을 찾을 수 없어요.');
 }
