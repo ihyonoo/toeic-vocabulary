@@ -1,4 +1,13 @@
-import type { DayWord, Word, WordPatch } from '$lib/domain/types';
+import type {
+	DayWord,
+	Draft,
+	DraftInput,
+	DraftSummary,
+	ImportResult,
+	Section,
+	Word,
+	WordPatch
+} from '$lib/domain/types';
 
 export class ApiError extends Error {
 	constructor(
@@ -33,5 +42,12 @@ export const api = {
 	addWord: (day: number, input: { english: string; meaning: string }) =>
 		request<{ word: DayWord; result: 'created' | 'linked' }>('POST', `/api/days/${day}/words`, input),
 	recordStudy: (day: number) =>
-		request<{ studyCount: number; lastStudiedOn: string }>('POST', `/api/days/${day}/study-log`)
+		request<{ studyCount: number; lastStudiedOn: string }>('POST', `/api/days/${day}/study-log`),
+	createImport: (input: { day: number; section: Section; photos: string[] }) =>
+		request<{ draft: DraftSummary }>('POST', '/api/imports', input),
+	getImport: (id: number) => request<{ draft: Draft }>('GET', `/api/imports/${id}`),
+	saveImport: (id: number, input: DraftInput) => request<{ draft: Draft }>('PUT', `/api/imports/${id}`, input),
+	commitImport: (id: number, input: DraftInput) =>
+		request<ImportResult>('POST', `/api/imports/${id}/commit`, input),
+	discardImport: (id: number) => request<void>('DELETE', `/api/imports/${id}`)
 };

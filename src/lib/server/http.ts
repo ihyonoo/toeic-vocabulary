@@ -6,7 +6,9 @@ const REPO_STATUS: Record<RepoErrorCode, number> = {
 	day_not_found: 404,
 	word_not_found: 404,
 	already_in_day: 409,
-	duplicate_word: 409
+	duplicate_word: 409,
+	draft_not_found: 404,
+	draft_not_ready: 409
 };
 
 export class HttpError extends Error {
@@ -29,7 +31,11 @@ export async function readJson(request: Request): Promise<unknown> {
 	}
 	try {
 		return await request.json();
-	} catch {
+	} catch (e) {
+		// BODY_SIZE_LIMIT를 넘으면 본문 읽기가 413으로 끝난다
+		if ((e as { status?: number })?.status === 413) {
+			throw new HttpError(413, 'payload_too_large', '요청이 너무 커요. 사진 수를 줄여 주세요.');
+		}
 		throw new HttpError(400, 'invalid_request', 'JSON 형식이 잘못됐어요.');
 	}
 }

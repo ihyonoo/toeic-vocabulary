@@ -1,10 +1,18 @@
 <script lang="ts">
+	import CameraIcon from 'phosphor-svelte/lib/CameraIcon';
 	import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
-	import { dayLabel, monthDay } from '$lib/domain/format';
+	import type { DraftSummary } from '$lib/domain/types';
+	import { dayLabel, monthDay, sectionLabel } from '$lib/domain/format';
 	import StudySheet from '$lib/components/StudySheet.svelte';
 
 	let { data } = $props();
 	let studyOpen = $state(false);
+
+	function draftStatus(draft: DraftSummary): string {
+		if (draft.status === 'processing') return '처리 중';
+		if (draft.status === 'failed') return '실패';
+		return `확인 대기 · ${draft.itemCount}단어`;
+	}
 </script>
 
 <header class="top">
@@ -16,8 +24,28 @@
 </header>
 
 <main>
+	{#if data.drafts.length > 0}
+		<section class="drafts" aria-labelledby="drafts-title">
+			<h2 id="drafts-title">사진 등록</h2>
+			<ul>
+				{#each data.drafts as draft (draft.id)}
+					<li>
+						<a href="/imports/{draft.id}">
+							<!-- Day 행과 이름이 겹치지 않게 앞에 붙인다 -->
+							<span class="sr-only">사진 등록 초안</span>
+							<span class="draft-title">{dayLabel(draft.day)} · {sectionLabel(draft.section)}</span>
+							<span class="draft-status" class:ready={draft.status === 'ready'} class:failed={draft.status === 'failed'}>
+								{draftStatus(draft)}
+							</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
 	{#if data.days.length === 0}
-		<p class="empty">아직 등록된 Day가 없어요. 단어 종이 사진을 Claude에 보내면 Day가 생겨요.</p>
+		<p class="empty">아직 등록된 Day가 없어요. 단어 종이 사진을 올리면 Day가 생겨요.</p>
 	{:else}
 		<ul class="days">
 			{#each data.days as day (day.number)}
@@ -38,6 +66,11 @@
 			{/each}
 		</ul>
 	{/if}
+
+	<a class="photo-link" href="/imports/new">
+		<CameraIcon size={22} />
+		사진으로 등록
+	</a>
 </main>
 
 <StudySheet
@@ -101,5 +134,65 @@
 	.days a :global(.chevron) {
 		grid-area: chevron;
 		color: var(--muted);
+	}
+	.drafts {
+		margin: 12px 0 8px;
+	}
+	.drafts h2 {
+		margin: 0 0 8px;
+		color: var(--muted);
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.drafts ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		overflow: hidden;
+	}
+	.drafts li + li {
+		border-top: 1px solid var(--line);
+	}
+	.drafts a {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 12px;
+		padding: 16px;
+	}
+	.draft-title {
+		font-weight: 600;
+	}
+	.draft-status {
+		color: var(--muted);
+		font-size: 15px;
+	}
+	.draft-status.ready {
+		color: var(--yellow);
+	}
+	.draft-status.failed {
+		color: var(--danger);
+	}
+	.photo-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		min-height: 52px;
+		margin-top: 16px;
+		border-radius: var(--radius);
+		border: 1px dashed var(--line);
+		color: var(--yellow);
+		font-weight: 600;
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 </style>
