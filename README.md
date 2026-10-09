@@ -22,22 +22,49 @@ cp .env.example .env   # APP_PASSWORD, OPENAI_API_KEY를 채운다
 | 변수 | 설명 |
 |---|---|
 | `APP_PASSWORD` | 로그인과 API 인증 비밀번호 |
+| `SESSION_SECRET` | 세션 쿠키 서명용 무작위 값(`openssl rand -hex 32`). 없으면 시작하지 않는다 |
 | `ORIGIN` | 접속 주소. `npm start`에 필수 (`http://macbook.local:3000`) |
 | `DATABASE_PATH` | SQLite 파일 (기본 `data/vocab.db`) |
 | `PORT` | 기본 3000 |
 | `OPENAI_API_KEY` | 사진 등록용. 없으면 사진 등록만 막힌다 |
 | `BODY_SIZE_LIMIT` | 요청 본문 한도. `20M`으로 둔다. 빠뜨리면 `npm start`에서 사진 업로드가 413 "요청이 너무 커요"로 실패한다 |
 
-## 실행
+## 사용
+
+- 주소: `https://voca.hwchoi.com` (devserver 배포, 아래 "배포")
+- 아이폰 Safari의 공유 → "홈 화면에 추가"를 누르면 앱처럼 전체 화면으로 열립니다
+
+## 로컬 실행 (개발)
 
 ```
 npm run build
 npm start
 ```
 
+- 개발 DB는 Mac의 `data/`에 따로 있습니다. 실제 단어는 서버에 있습니다
 - 폰과 Mac 모두 `http://macbook.local:3000`으로 접속합니다. 폰은 Mac과 같은 와이파이에 있어야 합니다
 - 다른 주소(예: `localhost`)로 접속하면 로그인이 유지되지 않습니다. `ORIGIN`과 같은 주소를 쓰세요
-- 아이폰 Safari의 공유 → "홈 화면에 추가"를 누르면 앱처럼 전체 화면으로 열립니다
+
+## 배포
+
+설계는 `docs/design/2026-10-10-devserver-deploy.md`에 있습니다.
+
+- main에 머지하면 GitHub Actions가 단위 테스트 → 이미지 빌드(`ghcr.io/ihyonoo/toeic-vocabulary`) → devserver 배포를 합니다
+- 배포는 저장소 변수 `DEPLOY_READY`가 `true`일 때만 합니다
+- 같은 커밋을 다시 배포하려면 Actions의 "CI and Deploy"를 `workflow_dispatch`로 실행합니다
+- 되돌리려면 main에 revert 커밋을 머지합니다. DB 마이그레이션은 되돌아가지 않습니다
+- 서버 구성: devserver `~/project/vocabulary`(이 저장소 clone)에서 `docker-compose.yml`로 앱과 `cloudflared`를 띄웁니다
+  - 서버 `.env`: `ORIGIN=https://voca.hwchoi.com`, `APP_PASSWORD`, `SESSION_SECRET`, `OPENAI_API_KEY`, `BODY_SIZE_LIMIT=20M`, `ADDRESS_HEADER=cf-connecting-ip`
+  - `OPENAI_API_KEY` 말고는 필수다. 빠지면 `docker compose up`이 실패한다
+  - 값은 작은따옴표로 감싼다. Compose는 따옴표 없는 값의 `$`를 변수로 읽어 값을 자른다
+  - DB: `~/project/vocabulary/data/vocab.db`
+  - 터널: 서버에서 `cloudflared` 명령으로 만든 터널 `vocabulary`. 설정은 `~/project/vocabulary/cloudflared/`의 `config.yml`과 터널 인증서 JSON(gitignore)
+    - 호스트 이름을 바꾸려면 `config.yml`의 `ingress`를 고치고 `cloudflared tunnel route dns vocabulary <새 이름>` 뒤 `docker compose restart cloudflared`
+    - 터널 관리 명령에는 `cloudflared tunnel login`으로 받는 `cert.pem`이 필요하다. 쓰고 나면 지운다
+  - 로그: `docker compose logs vocabulary`
+- 저장소 시크릿: `TS_AUTHKEY`(Tailscale 인증 키, 최대 90일 만료), `DEPLOY_SSH_KEY`, `DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`
+  - Tailscale 키가 만료되면 deploy 단계가 실패합니다. 새 키로 `gh secret set TS_AUTHKEY`
+- 배포 키는 서버 `authorized_keys`에서 `deploy/ci-deploy.sh`만 실행하도록 묶여 있습니다
 
 ## 사진으로 등록 (앱)
 
@@ -52,7 +79,7 @@ npm start
 
 ## 단어 등록 (Claude Code)
 
-종이 사진을 Claude Code 대화에 첨부하면 Claude가 아래 절차로 등록합니다.
+종이 사진을 Claude Code 대화에 첨부하면 Claude가 아래 절차로 등록합니다. 등록 대상은 서버(`https://voca.hwchoi.com`)입니다. Mac `.env`의 `ORIGIN`은 로컬 개발 주소라 쓰지 않습니다.
 
 1. 묶음을 정한다
    - 학원이 나눠 준 인쇄물이면 수업 단어(`"section": "class"`, 생략 가능)
@@ -71,7 +98,7 @@ npm start
 4. 등록한다
    ```
    set -a; source .env; set +a
-   curl -sS -X POST "$ORIGIN/api/days" -H "Authorization: Bearer $APP_PASSWORD" \
+   curl -sS -X POST "https://voca.hwchoi.com/api/days" -H "Authorization: Bearer $APP_PASSWORD" \
      -H 'content-type: application/json' --data @data/import/dayNN.json
    ```
 5. 응답을 종이와 대조해 사용자에게 보고한다
@@ -79,7 +106,7 @@ npm start
    - `created + linked + moved` = 고유 단어 수
    - `moved`: 같은 Day의 내 단어였다가 종이에 나와 수업 단어로 옮긴 단어. 사용자에게 알린다
 6. 고칠 때
-   - 단어 id 찾기: `GET /api/days/{n}` (묶음과 id가 담긴 단어 목록)
+   - 단어 id 찾기: `GET /api/days/{n}` (묶음과 id가 담긴 단어 목록, 주소는 4와 같다)
    - 예문·품사: `PATCH /api/words/{id}`
    - 묶음을 잘못 넣었을 때: `PATCH /api/days/{n}/words/{id}` 본문 `{ "section": "class" | "mine" }`
    - Day를 잘못 넣었을 때: `DELETE /api/days/{n}` 뒤 다시 등록
