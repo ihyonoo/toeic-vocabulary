@@ -121,23 +121,25 @@
 		<div class="meaning">
 			<MaskCell masked={isMeaningMasked(prefs.viewMode)}>{word.meaning}</MaskCell>
 		</div>
-		<button
-			type="button"
-			class="icon-btn mark"
-			class:on={word.bookmarked}
-			aria-label="북마크"
-			aria-pressed={word.bookmarked}
-			onclick={onbookmark}
-		>
-			<BookmarkSimpleIcon size={22} weight={word.bookmarked ? 'fill' : 'regular'} />
-		</button>
-		<button type="button" class="icon-btn hide" aria-label={word.hidden ? '숨김 해제' : '숨기기'} onclick={onhide}>
-			{#if word.hidden}
-				<EyeIcon size={22} />
-			{:else}
-				<EyeSlashIcon size={22} />
-			{/if}
-		</button>
+		<div class="actions">
+			<button type="button" class="icon-btn hide" aria-label={word.hidden ? '숨김 해제' : '숨기기'} onclick={onhide}>
+				{#if word.hidden}
+					<EyeIcon size={20} />
+				{:else}
+					<EyeSlashIcon size={20} />
+				{/if}
+			</button>
+			<button
+				type="button"
+				class="icon-btn mark"
+				class:on={word.bookmarked}
+				aria-label="북마크"
+				aria-pressed={word.bookmarked}
+				onclick={onbookmark}
+			>
+				<BookmarkSimpleIcon size={20} weight={word.bookmarked ? 'fill' : 'regular'} />
+			</button>
+		</div>
 	</div>
 </li>
 
@@ -170,29 +172,38 @@
 	.row {
 		position: relative;
 		display: grid;
-		grid-template-columns: 1fr 1fr auto auto;
-		gap: 12px;
+		grid-template-columns: 1fr 1fr auto;
+		gap: 10px;
 		align-items: center;
 		min-height: 64px;
-		padding: 10px 6px 10px 16px;
+		padding: 10px 4px 10px 16px;
 		background: var(--surface);
 		touch-action: pan-y;
 	}
 	.row.settling {
 		transition: transform 200ms ease-out;
 	}
-	.english {
-		font-size: 18px;
-		font-weight: 600;
+	/* 띄어쓰기에서만 줄을 바꾸고, 한 어절이 칸보다 길 때만 그 안에서 자른다 */
+	.english,
+	.meaning {
+		word-break: keep-all;
 		overflow-wrap: anywhere;
+	}
+	.english {
+		font-size: 16px;
+		font-weight: 600;
 	}
 	.meaning {
 		color: #c9c9cf;
-		font-size: 15px;
+		font-size: 14px;
 		line-height: 1.4;
+	}
+	.actions {
+		display: flex;
 	}
 	.mark,
 	.hide {
+		width: 36px;
 		color: var(--muted);
 	}
 	.mark.on {
