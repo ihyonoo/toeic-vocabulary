@@ -40,8 +40,6 @@ export type ImportItem = {
 	exampleKo?: string;
 };
 
-export type ImportInput = { day: number; section?: BaseSection; words: ImportItem[] };
-
 export type ImportResult = {
 	day: number;
 	created: WordRef[];

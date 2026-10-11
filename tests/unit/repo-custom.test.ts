@@ -11,12 +11,12 @@ import {
 	getAllWords,
 	getDayWords,
 	getDraft,
-	importDay,
 	listCustomSections,
 	listDrafts,
 	saveDraft,
 	setSection
 } from '$lib/server/repo';
+import { register } from '../support/register';
 import type { DraftItem } from '$lib/domain/types';
 
 // 커스텀 묶음 (docs/design/2026-10-11-custom-sections.md)
@@ -55,9 +55,9 @@ const view = (day: number) =>
 
 describe('커스텀 묶음 등록', () => {
 	it('커스텀 묶음 단어는 그 Day의 숙제 단어·내 단어 뒤에 이름과 함께 놓인다', () => {
-		importDay(db, { day: 3, section: 'mine', words: [{ english: 'river', meaning: '강' }] });
+		register(db, { day: 3, section: 'mine', words: [{ english: 'river', meaning: '강' }] });
 		commitCustom(3, '독해', [item('cloud', '구름')]);
-		importDay(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
 		expect(view(3)).toEqual(['class:apple', 'mine:river', 'custom:독해:cloud']);
 	});
 
@@ -69,8 +69,8 @@ describe('커스텀 묶음 등록', () => {
 	});
 
 	it('같은 Day의 내 단어는 커스텀 묶음 끝으로 옮기고, 숙제 단어·다른 묶음 단어는 건너뛴다', () => {
-		importDay(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
-		importDay(db, { day: 3, section: 'mine', words: [{ english: 'river', meaning: '강' }] });
+		register(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 3, section: 'mine', words: [{ english: 'river', meaning: '강' }] });
 		commitCustom(3, '독해', [item('cloud', '구름')]);
 		const result = commitCustom(3, '어휘', [item('apple', '사과'), item('river', '강'), item('cloud', '구름')]);
 		expect(result.moved.map((w) => w.english)).toEqual(['river']);
@@ -87,7 +87,7 @@ describe('커스텀 묶음 등록', () => {
 	it('Claude Code 등록 API는 커스텀 묶음을 받지 않는다', () => {
 		expectRepoError(
 			() =>
-				importDay(db, {
+				register(db, {
 					day: 3,
 					section: 'custom',
 					customName: '독해',
@@ -141,7 +141,7 @@ describe('커스텀 묶음 초안', () => {
 		commitCustom(5, '어휘', [item('b1', '비1')]);
 		commitCustom(3, '독해', [item('a1', '에이1')]);
 		commitCustom(3, '듣기', [item('a2', '에이2')]);
-		importDay(db, { day: 4, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 4, words: [{ english: 'apple', meaning: '사과' }] });
 		expect(listCustomSections(db)).toEqual({ 3: ['독해', '듣기'], 5: ['어휘'] });
 	});
 });
@@ -164,7 +164,7 @@ describe('커스텀 묶음 단어 다루기', () => {
 	});
 
 	it('통합 학습에서 커스텀 묶음 단어는 전체에만 들어간다', () => {
-		importDay(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
 		commitCustom(3, '독해', [item('cloud', '구름')]);
 		expect(getAllWords(db, { includeHidden: false }).map((w) => w.english)).toEqual(['apple', 'cloud']);
 		expect(getAllWords(db, { includeHidden: false, group: 'class' }).map((w) => w.english)).toEqual(['apple']);

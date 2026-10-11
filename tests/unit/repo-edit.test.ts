@@ -9,11 +9,11 @@ import {
 	getAllWords,
 	getBookmarkedWords,
 	getDayWords,
-	importDay,
 	listDays,
 	recordStudy,
 	updateWord
 } from '$lib/server/repo';
+import { register } from '../support/register';
 
 let db: DatabaseSync;
 
@@ -41,8 +41,8 @@ function expectRepoError(fn: () => unknown, code: string) {
 
 describe('updateWord', () => {
 	beforeEach(() => {
-		importDay(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
-		importDay(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
+		register(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
+		register(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
 	});
 
 	it('북마크와 숨김은 그 단어가 속한 모든 Day에 같이 적용된다 (R-2)', () => {
@@ -93,8 +93,8 @@ describe('updateWord', () => {
 
 describe('deleteWord (R-21)', () => {
 	it('그 단어를 모든 Day에서 지운다', () => {
-		importDay(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
-		importDay(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
+		register(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
+		register(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
 
 		expect(deleteWord(db, idOf('garden'))).toBe(true);
 		expect(getDayWords(db, 1)!.map((w) => w.english)).toEqual(['tiger']);
@@ -105,8 +105,8 @@ describe('deleteWord (R-21)', () => {
 
 describe('deleteDay (R-8)', () => {
 	it('그 Day를 지우고 어느 Day에도 없게 된 단어만 함께 지운다', () => {
-		importDay(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
-		importDay(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
+		register(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
+		register(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
 
 		expect(deleteDay(db, 1)).toEqual({ deletedWords: 1 });
 		expect(getDayWords(db, 1)).toBeNull();
@@ -121,8 +121,8 @@ describe('deleteDay (R-8)', () => {
 
 describe('addWordToDay (R-22)', () => {
 	beforeEach(() => {
-		importDay(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }] });
-		importDay(db, { day: 2, words: [{ english: 'cousin', meaning: '사촌', pos: '명사', example: 'My cousin visited.' }] });
+		register(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }] });
+		register(db, { day: 2, words: [{ english: 'cousin', meaning: '사촌', pos: '명사', example: 'My cousin visited.' }] });
 	});
 
 	it('처음 보는 단어는 만들어 Day 끝에 붙인다', () => {
@@ -151,8 +151,8 @@ describe('addWordToDay (R-22)', () => {
 
 describe('getAllWords와 getBookmarkedWords (R-24, R-39)', () => {
 	beforeEach(() => {
-		importDay(db, { day: 2, words: [{ english: 'b1', meaning: '비1' }, { english: 'shared', meaning: '공통' }] });
-		importDay(db, {
+		register(db, { day: 2, words: [{ english: 'b1', meaning: '비1' }, { english: 'shared', meaning: '공통' }] });
+		register(db, {
 			day: 1,
 			words: [{ english: 'a1', meaning: '에이1' }, { english: 'a2', meaning: '에이2' }, { english: 'shared', meaning: '공통' }]
 		});
@@ -164,8 +164,8 @@ describe('getAllWords와 getBookmarkedWords (R-24, R-39)', () => {
 
 	it('아주 큰 Day 번호에서도 (Day, 위치) 순서를 지킨다', () => {
 		const big = Number.MAX_SAFE_INTEGER;
-		importDay(db, { day: big, words: [{ english: 'z1', meaning: '제트1' }, { english: 'z2', meaning: '제트2' }] });
-		importDay(db, { day: big - 1, words: [{ english: 'y1', meaning: '와이1' }] });
+		register(db, { day: big, words: [{ english: 'z1', meaning: '제트1' }, { english: 'z2', meaning: '제트2' }] });
+		register(db, { day: big - 1, words: [{ english: 'y1', meaning: '와이1' }] });
 		const tail = getAllWords(db, { includeHidden: true }).map((w) => w.english).slice(-3);
 		expect(tail).toEqual(['y1', 'z1', 'z2']);
 	});
@@ -187,7 +187,7 @@ describe('getAllWords와 getBookmarkedWords (R-24, R-39)', () => {
 
 describe('recordStudy (R-13)', () => {
 	it('서울 날짜로 기록하고 횟수와 마지막 학습일을 돌려준다', () => {
-		importDay(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }] });
+		register(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }] });
 
 		// 서울 10-07 23:59
 		expect(recordStudy(db, 1, new Date('2026-10-07T14:59:00Z'))).toEqual({ studyCount: 1, lastStudiedOn: '2026-10-07' });
