@@ -76,6 +76,24 @@ test('카드 보기에는 숨긴 단어도 나오고, 숨기기는 카드를 빼
 	await expect(page.getByTestId('progress')).toHaveText('2 / 2');
 });
 
+test('Day 목록에서 연 카드 보기는 목록처럼 숨긴 단어를 맨 뒤에 둔다', async ({ page, request }) => {
+	const seeded = await seedDay(request, 942, [
+		{ english: 'hid942', meaning: '숨김' },
+		{ english: 'show942', meaning: '보임' }
+	]);
+	await seedDay(request, 942, [{ english: 'mine942', meaning: '내것' }], 'mine');
+	await request.patch(`/api/words/${seeded.created[0].id}`, { headers: AUTH, data: { hidden: true } });
+	await page.goto('/days/942');
+
+	await page.getByRole('listitem').first().getByText('show942').click();
+	await expect(page.getByTestId('progress')).toHaveText('1 / 3');
+	await swipeCard(page, 'left');
+	await expect(page.getByTestId('card-english')).toHaveText('mine942');
+	await swipeCard(page, 'left');
+	await expect(page.getByTestId('card-english')).toHaveText('hid942');
+	await expect(page.getByTestId('card')).toContainText('숨긴 단어');
+});
+
 test('뒤로를 누르면 목록으로 돌아간다', async ({ page, request }) => {
 	await seedDay(request, 934, [{ english: 'back934', meaning: '뒤로' }]);
 	await page.goto('/days/934');
@@ -136,16 +154,17 @@ test('행의 북마크 버튼은 카드로 가지 않고, 열린 밀기 메뉴�
 	await expect(page).toHaveURL(/\/days\/938$/);
 
 	await swipeRow(page, first);
-	await expect(first.getByRole('button', { name: '숨기기' })).toBeVisible();
+	await expect(first.getByRole('button', { name: '수정' })).toBeVisible();
 	await page.getByRole('listitem').nth(1).getByText('second938', { exact: true }).click();
-	await expect(first.getByRole('button', { name: '숨기기' })).toHaveCount(0);
+	await expect(first.getByRole('button', { name: '수정' })).toHaveCount(0);
 	await expect(page).toHaveURL(/\/days\/938$/);
 
-	// 같은 행의 보이는 부분을 눌러도 메뉴만 닫힌다
+	// 같은 행의 보이는 부분(버튼 밖)을 눌러도 메뉴만 닫힌다
+	// 메뉴가 열리면 왼쪽 끝에 뜻 칸이 조금 남는다
 	await swipeRow(page, first);
-	await expect(first.getByRole('button', { name: '숨기기' })).toBeVisible();
-	await first.click({ position: { x: 60, y: 20 } });
-	await expect(first.getByRole('button', { name: '숨기기' })).toHaveCount(0);
+	await expect(first.getByRole('button', { name: '수정' })).toBeVisible();
+	await first.click({ position: { x: 10, y: 20 } });
+	await expect(first.getByRole('button', { name: '수정' })).toHaveCount(0);
 	await expect(page).toHaveURL(/\/days\/938$/);
 });
 

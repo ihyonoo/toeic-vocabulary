@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { FAKE_OPENAI } from '../../playwright.config';
-import { AUTH, login, seedDay } from './helpers';
+import { AUTH, login, seedCustom, seedDay } from './helpers';
 
 test.use({ reducedMotion: 'reduce' });
 
@@ -34,11 +34,11 @@ async function scenario(request: APIRequestContext, next: Record<string, unknown
 }
 
 // 라디오는 라벨이 덮고 있어 라벨을 누른다
-async function pickSection(page: Page, name: '수업 단어' | '내 단어') {
+async function pickSection(page: Page, name: '숙제 단어' | '내 단어' | '다른 묶음') {
 	await page.getByRole('radiogroup', { name: '묶음' }).getByText(name, { exact: true }).click();
 }
 
-async function upload(page: Page, opts: { day?: number; section?: '수업 단어' | '내 단어'; photos?: number }) {
+async function upload(page: Page, opts: { day?: number; section?: '숙제 단어' | '내 단어'; photos?: number }) {
 	await page.goto('/imports/new');
 	if (opts.section) await pickSection(page, opts.section);
 	if (opts.day !== undefined) await page.getByLabel('Day 번호').fill(String(opts.day));
@@ -49,7 +49,7 @@ async function upload(page: Page, opts: { day?: number; section?: '수업 단어
 	await expect(page).toHaveURL(/\/imports\/\d+$/);
 }
 
-test('홈 Day 목록 끝에서 시작하고, 수업 단어 기본 번호는 마지막 + 1이다 (R-45, R-47)', async ({ page, request }) => {
+test('홈 Day 목록 끝에서 시작하고, 숙제 단어 기본 번호는 마지막 + 1이다 (R-45, R-47)', async ({ page, request }) => {
 	await seedDay(request, 990, [{ english: 'last990', meaning: '마지막' }]);
 	await page.goto('/');
 	const link = page.getByRole('link', { name: '사진으로 등록' });
@@ -65,7 +65,7 @@ test('홈 Day 목록 끝에서 시작하고, 수업 단어 기본 번호는 마�
 	await pickSection(page, '내 단어');
 	await expect(day).toHaveValue('');
 	await expect(page.getByRole('button', { name: '올리기' })).toBeDisabled();
-	await pickSection(page, '수업 단어');
+	await pickSection(page, '숙제 단어');
 	await expect(day).toHaveValue('991');
 });
 
@@ -83,7 +83,7 @@ test('사진은 5장까지 쌓이고 하나씩 뺄 수 있다 (R-46)', async ({ 
 	await expect(thumbs.nth(1)).toContainText('2');
 });
 
-test('수업 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 → 결과 (R-52~R-65)', async ({ page, request }) => {
+test('숙제 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 → 결과 (R-52~R-65)', async ({ page, request }) => {
 	// 가짜 서버는 사진마다 같은 두 단어를 돌려준다 → apple, river, apple, river
 	await scenario(request, {
 		delayMs: 1500,
@@ -140,7 +140,7 @@ test('수업 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 →
 
 	await page.getByRole('link', { name: 'Day 951로' }).click();
 	await expect(page).toHaveURL('/days/951');
-	await expect(page.getByRole('heading', { name: /수업 단어/ })).toContainText('2');
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('2');
 	const day = await (await request.get('/api/days/951', { headers: AUTH })).json();
 	expect(day.words.find((w: { english: string }) => w.english === 'river')).toMatchObject({
 		meaning: '강, 하천',
@@ -149,7 +149,7 @@ test('수업 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 →
 
 	// 등록한 초안은 홈에서 사라진다
 	await page.goto('/');
-	await expect(page.getByText('Day 951 · 수업 단어')).toHaveCount(0);
+	await expect(page.getByText('Day 951 · 숙제 단어')).toHaveCount(0);
 });
 
 test('내 단어: 번호를 넣어야 올리고, 등록하면 내 단어 묶음에 들어간다', async ({ page, request }) => {
@@ -166,6 +166,47 @@ test('내 단어: 번호를 넣어야 올리고, 등록하면 내 단어 묶음�
 	await page.getByRole('button', { name: '1단어 등록' }).click();
 	await page.getByRole('link', { name: 'Day 952로' }).click();
 	await expect(page.getByRole('heading', { name: /내 단어/ })).toContainText('1');
+});
+
+test('다른 묶음: 이름을 넣어 올리고, 등록하면 Day 화면에서 내 단어 뒤에 그 묶음이 생긴다', async ({ page, request }) => {
+	await seedDay(request, 960, [{ english: 'class960', meaning: '숙제' }]);
+	await seedDay(request, 960, [{ english: 'mine960', meaning: '내것' }], 'mine');
+	await scenario(request, { words: [word('read960', '읽기')] });
+	await page.goto('/imports/new');
+	await pickSection(page, '다른 묶음');
+	await page.getByLabel('사진 더하기').setInputFiles([photo(1)]);
+	await page.getByLabel('Day 번호').fill('960');
+	await expect(page.getByRole('button', { name: '올리기' })).toBeDisabled();
+	await page.getByLabel('묶음 이름').fill('숙제 단어');
+	await expect(page.getByText('숙제 단어·내 단어·숨긴 단어는 쓸 수 없어요', { exact: false })).toBeVisible();
+	await expect(page.getByRole('button', { name: '올리기' })).toBeDisabled();
+	await page.getByLabel('묶음 이름').fill(' 독해 ');
+	await page.getByRole('button', { name: '올리기' }).click();
+
+	await expect(page.getByRole('button', { name: '1단어 등록' })).toBeVisible({ timeout: 10_000 });
+	// 홈 초안 줄은 묶음 이름을 적는다
+	await page.goto('/');
+	await page.getByRole('link', { name: /Day 960 · 독해/ }).click();
+	await expect(page.getByRole('radio', { name: '다른 묶음' })).toBeChecked();
+	await expect(page.getByLabel('묶음 이름')).toHaveValue('독해');
+	await page.getByRole('button', { name: '1단어 등록' }).click();
+	await page.getByRole('link', { name: 'Day 960로' }).click();
+
+	await expect(page.getByRole('heading', { level: 2 })).toHaveText([/숙제 단어/, /내 단어/, /독해/]);
+	await expect(page.getByRole('listitem')).toHaveText([/class960/, /mine960/, /read960/]);
+});
+
+test('다른 묶음을 고르면 그 Day에 이미 있는 묶음 이름을 골라 넣을 수 있다', async ({ page, request }) => {
+	await seedCustom(request, 961, '독해', [{ english: 'read961', meaning: '읽기' }]);
+	await page.goto('/imports/new');
+	await pickSection(page, '다른 묶음');
+	await page.getByLabel('Day 번호').fill('961');
+	await page.getByRole('button', { name: '독해', exact: true }).click();
+	await expect(page.getByLabel('묶음 이름')).toHaveValue('독해');
+	// 숙제 단어로 돌아가면 다음 번호를 다시 제안한다
+	await pickSection(page, '숙제 단어');
+	await expect(page.getByLabel('Day 번호')).not.toHaveValue('961');
+	await expect(page.getByLabel('묶음 이름')).toHaveCount(0);
 });
 
 test('미리보기에서 Day 번호와 묶음을 바꿔 등록한다 (R-63)', async ({ page, request }) => {
@@ -199,7 +240,7 @@ test('실패: 홈 줄에 실패가 보이고, 초안 화면에서 이유를 보�
 	await expect(page.getByText('OpenAI API 키가 잘못됐어요.')).toBeVisible();
 
 	await page.goto('/');
-	const row = page.getByRole('link', { name: /Day 957 · 수업 단어/ });
+	const row = page.getByRole('link', { name: /Day 957 · 숙제 단어/ });
 	await expect(row).toContainText('실패');
 	await row.click();
 	await page.getByRole('button', { name: '버리기' }).click();
@@ -214,7 +255,7 @@ test('처리 중인 초안도 버릴 수 있다 (R-66)', async ({ page, request 
 	await expect(page.getByText('AI가 단어를 읽고 있어요')).toBeVisible();
 
 	await page.goto('/');
-	await expect(page.getByRole('link', { name: /Day 958 · 수업 단어/ })).toContainText('처리 중');
+	await expect(page.getByRole('link', { name: /Day 958 · 숙제 단어/ })).toContainText('처리 중');
 	await page.getByRole('link', { name: /Day 958/ }).click();
 	await page.getByRole('button', { name: '버리기' }).click();
 	await page.getByRole('dialog', { name: '초안 버리기' }).getByRole('button', { name: '버리기' }).click();

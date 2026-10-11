@@ -10,13 +10,16 @@
 		onclose,
 		scope,
 		day,
-		studyableCounts
+		studyableCounts,
+		customGroups = []
 	}: {
 		open: boolean;
 		onclose: () => void;
 		scope: StudyScope;
 		day?: number;
 		studyableCounts: Record<StudyGroup, number>;
+		// Day 학습에서만 준다 (docs/design/2026-10-11-custom-sections.md)
+		customGroups?: { name: string; count: number }[];
 	} = $props();
 
 	const ORDERS: { value: Order; label: string }[] = [
@@ -32,14 +35,16 @@
 	];
 
 	const GROUPS: { value: StudyGroup; label: string }[] = [
-		{ value: 'all', label: '둘 다' },
-		{ value: 'class', label: '수업 단어' },
+		{ value: 'all', label: '전체' },
+		{ value: 'class', label: '숙제 단어' },
 		{ value: 'mine', label: '내 단어' }
 	];
+	// 커스텀 묶음 칩의 값
+	const CUSTOM = 'custom:';
 
 	let order = $state<Order>('textbook');
 	let repeat = $state('1');
-	let group = $state<StudyGroup>('all');
+	let group = $state<string>('all');
 
 	$effect.pre(() => {
 		if (!open) return;
@@ -50,20 +55,31 @@
 		group = untrack(() => studyableCounts[saved.group]) > 0 ? saved.group : 'all';
 	});
 
-	const count = $derived(studyableCounts[group]);
+	const customName = $derived(group.startsWith(CUSTOM) ? group.slice(CUSTOM.length) : null);
+	const count = $derived(
+		customName === null
+			? studyableCounts[group as StudyGroup]
+			: (customGroups.find((g) => g.name === customName)?.count ?? 0)
+	);
 	const emptyReason = $derived(
 		studyableCounts.all === 0
 			? '학습할 단어가 없어요. 숨긴 단어는 학습에서 빠져요.'
 			: '이 묶음에는 학습할 단어가 없어요.'
 	);
 
+	// 커스텀 묶음 선택은 기억하지 않고, 기억한 기본 묶음을 둔다
 	function start() {
-		saveStudyPrefs({ order, repeat: (repeat === 'loop' ? 'loop' : Number(repeat)) as Repeat, group });
+		saveStudyPrefs({
+			order,
+			repeat: (repeat === 'loop' ? 'loop' : Number(repeat)) as Repeat,
+			group: customName === null ? (group as StudyGroup) : loadStudyPrefs().group
+		});
 		const params = new URLSearchParams({ scope });
 		if (day !== undefined) params.set('day', String(day));
 		params.set('order', order);
 		params.set('repeat', repeat);
-		params.set('group', group);
+		params.set('group', customName === null ? group : 'custom');
+		if (customName !== null) params.set('name', customName);
 		goto(`/study?${params}`);
 	}
 </script>
@@ -98,6 +114,12 @@
 				<label class="chip">
 					<input type="radio" name="group" value={option.value} bind:group />
 					{option.label}
+				</label>
+			{/each}
+			{#each customGroups as option (option.name)}
+				<label class="chip">
+					<input type="radio" name="group" value={CUSTOM + option.name} bind:group />
+					{option.name}
 				</label>
 			{/each}
 		</div>

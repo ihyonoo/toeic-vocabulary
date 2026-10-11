@@ -61,7 +61,7 @@ describe('마이그레이션', () => {
 		v2.close();
 
 		const db = openDb(path);
-		expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 });
+		expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: MIGRATIONS.length });
 		expect(getDayWords(db, 1)!.map((w) => `${w.section}:${w.english}`)).toEqual(['mine:apple']);
 		expect(db.prepare('SELECT COUNT(*) AS n FROM drafts').get()).toEqual({ n: 0 });
 		expect(() =>
@@ -71,6 +71,60 @@ describe('마이그레이션', () => {
 				)
 				.run()
 		).toThrow(/CHECK/);
+		db.close();
+	});
+
+	it('버전 3 DB를 열면 소속과 초안이 값 그대로 옮겨지고 커스텀 묶음을 담을 수 있다', () => {
+		dir = mkdtempSync(join(tmpdir(), 'vocab-migrate-'));
+		const path = join(dir, 'v3.db');
+		const v3 = new DatabaseSync(path);
+		for (const sql of MIGRATIONS.slice(0, 3)) v3.exec(sql);
+		v3.exec('PRAGMA user_version = 3');
+		v3.exec(`INSERT INTO days (number, created_at) VALUES (1, 'x'), (2, 'x');
+			INSERT INTO words (id, english, english_key, meaning, created_at) VALUES
+			  (1, 'apple', 'apple', '사과', 'x'), (2, 'river', 'river', '강', 'x'), (3, 'cloud', 'cloud', '구름', 'x');
+			INSERT INTO day_words (day_number, word_id, position, section) VALUES
+			  (1, 1, 1, 'class'), (1, 2, 2, 'mine'), (2, 1, 1, 'mine'), (2, 3, 2, 'class');
+			INSERT INTO drafts (id, day_number, section, status, photo_count, items, error, created_at, updated_at)
+			  VALUES (7, 4, 'mine', 'failed', 2, '[]', '이유', 'c', 'u');`);
+		v3.close();
+
+		const db = openDb(path);
+		expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: MIGRATIONS.length });
+		const rows = db
+			.prepare('SELECT day_number, word_id, position, section, custom_name FROM day_words ORDER BY day_number, position')
+			.all()
+			.map((r) => ({ ...r }));
+		expect(rows).toEqual([
+			{ day_number: 1, word_id: 1, position: 1, section: 'class', custom_name: null },
+			{ day_number: 1, word_id: 2, position: 2, section: 'mine', custom_name: null },
+			{ day_number: 2, word_id: 1, position: 1, section: 'mine', custom_name: null },
+			{ day_number: 2, word_id: 3, position: 2, section: 'class', custom_name: null }
+		]);
+		expect({ ...db.prepare('SELECT * FROM drafts').get() }).toEqual({
+			id: 7,
+			day_number: 4,
+			section: 'mine',
+			custom_name: null,
+			status: 'failed',
+			photo_count: 2,
+			items: '[]',
+			error: '이유',
+			created_at: 'c',
+			updated_at: 'u'
+		});
+		// 단어를 지우면 소속도 지워진다 (FK가 살아 있다)
+		db.prepare('DELETE FROM words WHERE id = 3').run();
+		expect(db.prepare('SELECT COUNT(*) AS n FROM day_words WHERE day_number = 2').get()).toEqual({ n: 1 });
+
+		db.prepare("UPDATE day_words SET section = 'custom', custom_name = '독해' WHERE word_id = 2").run();
+		expect(() => db.prepare("UPDATE day_words SET section = 'custom', custom_name = NULL WHERE word_id = 2").run()).toThrow(
+			/CHECK/
+		);
+		expect(() => db.prepare("UPDATE day_words SET section = 'class', custom_name = '독해' WHERE word_id = 2").run()).toThrow(
+			/CHECK/
+		);
+		expect(() => db.prepare("UPDATE drafts SET section = 'custom' WHERE id = 7").run()).toThrow(/CHECK/);
 		db.close();
 	});
 });

@@ -22,20 +22,67 @@ test('행 북마크를 켜고 끄면 저장된다 (R-19)', async ({ page, reques
 	);
 });
 
-test('행을 왼쪽으로 밀어 숨기면 흐리게 보이고, 숨김 해제로 되돌린다 (R-20)', async ({ page, request }) => {
-	await seedDay(request, 502, [{ english: 'narrow', meaning: '좁은' }]);
+test('행의 숨기기 버튼을 누르면 맨 아래 숨긴 단어 묶음으로 옮기고, 숨김 해제하면 원래 자리로 돌아간다 (R-20)', async ({
+	page,
+	request
+}) => {
+	await seedDay(request, 508, [
+		{ english: 'alpha508', meaning: '가' },
+		{ english: 'beta508', meaning: '나' },
+		{ english: 'gamma508', meaning: '다' }
+	]);
+	await seedDay(request, 508, [{ english: 'mine508', meaning: '내것' }], 'mine');
+	await page.goto('/days/508');
+	const rows = page.getByRole('listitem');
+	const hiddenHeading = page.getByRole('heading', { name: /숨긴 단어/ });
+	await expect(hiddenHeading).toHaveCount(0);
+
+	await rows.filter({ hasText: 'beta508' }).getByRole('button', { name: '숨기기' }).click();
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('2');
+	await expect(hiddenHeading).toContainText('1');
+	await expect(rows).toHaveText([/alpha508/, /gamma508/, /mine508/, /beta508/]);
+	// 따로 모였으니 흐리게 하지 않는다
+	await expect(rows.last()).toHaveCSS('opacity', '1');
+	await page.reload();
+	await expect(rows).toHaveText([/alpha508/, /gamma508/, /mine508/, /beta508/]);
+
+	await rows.filter({ hasText: 'beta508' }).getByRole('button', { name: '숨김 해제' }).click();
+	await expect(rows).toHaveText([/alpha508/, /beta508/, /gamma508/, /mine508/]);
+	await expect(hiddenHeading).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('3');
+});
+
+test('행을 왼쪽으로 밀어 나온 숨기기도 숨긴 단어 묶음으로 옮긴다 (R-20)', async ({ page, request }) => {
+	await seedDay(request, 502, [
+		{ english: 'narrow', meaning: '좁은' },
+		{ english: 'wide502', meaning: '넓은' }
+	]);
 	await page.goto('/days/502');
 	const row = page.getByRole('listitem').first();
 
 	await swipeRow(page, row);
+	await row.getByTestId('row-menu').getByRole('button', { name: '숨기기' }).click();
+	await expect(page.getByRole('heading', { name: /숨긴 단어/ })).toContainText('1');
+	await expect(page.getByRole('listitem')).toHaveText([/wide502/, /narrow/]);
+});
+
+test('북마크 화면에서는 행의 숨기기 버튼으로 숨겨도 제자리에 흐리게 남는다', async ({ page, request }) => {
+	const seeded = await seedDay(request, 509, [
+		{ english: 'keep509', meaning: '남김' },
+		{ english: 'fade509', meaning: '흐림' }
+	]);
+	for (const word of seeded.created) {
+		await request.patch(`/api/words/${word.id}`, { headers: AUTH, data: { bookmarked: true } });
+	}
+	await page.goto('/bookmarks');
+	const row = page.getByRole('listitem').filter({ hasText: 'fade509' });
+
 	await row.getByRole('button', { name: '숨기기' }).click();
 	await expect(row).toHaveCSS('opacity', '0.4');
+	await expect(page.getByRole('heading', { name: /숨긴 단어/ })).toHaveCount(0);
 	await page.reload();
-	await expect(page.getByRole('listitem').first()).toHaveCSS('opacity', '0.4');
-
-	await swipeRow(page, page.getByRole('listitem').first());
-	await page.getByRole('button', { name: '숨김 해제' }).click();
-	await expect(page.getByRole('listitem').first()).toHaveCSS('opacity', '1');
+	await expect(row).toHaveCSS('opacity', '0.4');
+	await expect(row.getByRole('button', { name: '숨김 해제' })).toBeVisible();
 });
 
 test('행을 밀어 영어·뜻을 고치고, 다른 단어와 겹치면 시트에 이유를 보여준다 (R-21)', async ({
@@ -100,7 +147,7 @@ test('단어 추가로 영어·뜻을 넣으면 내 단어 끝에 붙고, 이미
 	await sheet.getByLabel('영어').fill('Orbit');
 	await sheet.getByLabel('뜻').fill('궤도');
 	await sheet.getByRole('button', { name: '추가' }).click();
-	await expect(sheet.getByText('이 Day의 수업 단어에 이미 있어요.')).toBeVisible();
+	await expect(sheet.getByText('이 Day의 숙제 단어에 이미 있어요.')).toBeVisible();
 });
 
 test('단어 수정 API는 409와 정규화된 값을, Day 삭제 API는 지운 단어 수를 돌려준다 (R-7, R-8)', async ({

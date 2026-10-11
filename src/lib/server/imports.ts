@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { DraftSummary, Section } from '$lib/domain/types';
+import { CUSTOM_NAME_RULE, cleanCustomName } from '$lib/domain/normalize';
 import { MAX_PHOTOS, PHOTO_DATA_PREFIX, PHOTO_MAX_LENGTH } from '$lib/domain/photos';
 import { ExtractError, extractWords } from './extract';
 import { HttpError } from './http';
@@ -13,12 +14,26 @@ function invalid(message: string): HttpError {
 	return new HttpError(400, 'invalid_request', message);
 }
 
-function cleanUpload(input: unknown): { day: number; section: Section; photos: string[] } {
-	const { day, section, photos } = (input ?? {}) as { day?: unknown; section?: unknown; photos?: unknown };
+function cleanUpload(input: unknown): {
+	day: number;
+	section: Section;
+	customName: string | null;
+	photos: string[];
+} {
+	const { day, section, customName, photos } = (input ?? {}) as {
+		day?: unknown;
+		section?: unknown;
+		customName?: unknown;
+		photos?: unknown;
+	};
 	if (typeof day !== 'number' || !Number.isSafeInteger(day) || day < 1) {
 		throw invalid('Day 번호는 1 이상의 정수여야 해요.');
 	}
-	if (section !== 'class' && section !== 'mine') throw invalid("section은 'class'나 'mine'이어야 해요.");
+	if (section !== 'class' && section !== 'mine' && section !== 'custom') {
+		throw invalid("section은 'class', 'mine', 'custom' 중 하나여야 해요.");
+	}
+	const name = section === 'custom' ? cleanCustomName(customName) : null;
+	if (section === 'custom' && name === null) throw invalid(CUSTOM_NAME_RULE);
 	if (!Array.isArray(photos) || photos.length < 1 || photos.length > MAX_PHOTOS) {
 		throw invalid(`사진은 1~${MAX_PHOTOS}장이어야 해요.`);
 	}
@@ -26,7 +41,7 @@ function cleanUpload(input: unknown): { day: number; section: Section; photos: s
 		throw invalid('사진 형식이 잘못됐어요.');
 	}
 	if (photos.some((p) => p.length > PHOTO_MAX_LENGTH)) throw invalid('사진이 너무 커요.');
-	return { day, section, photos };
+	return { day, section, customName: name, photos };
 }
 
 // 초안을 만들고 처리를 시작한다
@@ -39,8 +54,8 @@ export function startImport(
 	if (!opts.apiKey) {
 		throw new HttpError(503, 'openai_not_configured', 'OpenAI API 키가 설정되지 않았어요.');
 	}
-	const { day, section, photos } = cleanUpload(input);
-	const draft = createDraft(db, { day, section, photoCount: photos.length });
+	const { day, section, customName, photos } = cleanUpload(input);
+	const draft = createDraft(db, { day, section, customName, photoCount: photos.length });
 	return { draft, done: runImport(db, draft.id, photos, opts) };
 }
 

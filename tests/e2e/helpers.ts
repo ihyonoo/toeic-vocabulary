@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
-import { E2E_PASSWORD } from '../../playwright.config';
+import { E2E_PASSWORD, FAKE_OPENAI } from '../../playwright.config';
 
 export const AUTH = { Authorization: `Bearer ${E2E_PASSWORD}` };
 
@@ -12,6 +12,35 @@ export async function seedDay(
 	section: 'class' | 'mine' = 'class'
 ) {
 	const res = await request.post('/api/days', { headers: AUTH, data: { day, section, words } });
+	expect(res.status()).toBe(200);
+	return res.json();
+}
+
+// 커스텀 묶음은 사진 등록으로만 생긴다
+// 가짜 OpenAI가 그 단어들을 읽은 초안을 만들고 등록한다
+export async function seedCustom(request: APIRequestContext, day: number, customName: string, words: Item[]) {
+	const items = words.map((w) => ({
+		english: w.english,
+		meaning: w.meaning,
+		pos: '명사',
+		example: `The ${w.english}.`,
+		exampleKo: `${w.meaning}.`,
+		paperEnglish: null,
+		meaningFilled: false
+	}));
+	const scenario = await request.post(`${FAKE_OPENAI}/__scenario`, { data: { words: items } });
+	expect(scenario.status()).toBe(204);
+	const target = { day, section: 'custom', customName };
+	const created = await request.post('/api/imports', {
+		headers: AUTH,
+		data: { ...target, photos: ['data:image/jpeg;base64,AAAA'] }
+	});
+	expect(created.status()).toBe(201);
+	const { draft } = await created.json();
+	await expect
+		.poll(async () => (await (await request.get(`/api/imports/${draft.id}`, { headers: AUTH })).json()).draft.status)
+		.toBe('ready');
+	const res = await request.post(`/api/imports/${draft.id}/commit`, { headers: AUTH, data: { ...target, items } });
 	expect(res.status()).toBe(200);
 	return res.json();
 }
