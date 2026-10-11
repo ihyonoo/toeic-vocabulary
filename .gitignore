@@ -16,3 +16,7 @@ test-results/
 playwright-report/
 # 서버의 터널 설정과 인증서 (docker-compose.yml)
 /cloudflared/
+# 지침 파일과 문서 (로컬 전용)
+/AGENTS.md
+/CLAUDE.md
+/docs/
