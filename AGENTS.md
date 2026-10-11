@@ -20,6 +20,7 @@
 - 설계 메모가 PRD·TRD와 다르면 메모가 우선한다 (PRD·TRD 머리말에 표시)
 - 사진 등록은 `docs/prd/2026-10-09-photo-import.md`, `docs/trd/2026-10-09-photo-import.md`
 - 배포는 `docs/design/2026-10-10-devserver-deploy.md`, 절차는 README "배포"
+- 묶음(숙제·내·커스텀·숨긴 단어)은 `docs/design/2026-10-11-custom-sections.md`
 - 진행 상황은 `docs/progress/2026-10-07-toeic-vocab-app.md` 하나에 이어 쓴다
 - 등록 절차는 `README.md`의 "사진으로 등록 (앱)"과 "단어 등록 (Claude Code)"
 
@@ -51,6 +52,7 @@
 - 전역 `ssr = false`다. 보기 모드가 localStorage에만 있어 SSR하면 가린 칸이 잠깐 드러난다
 - Playwright에는 터치 밀기 API가 없다. E2E의 밀기는 `page.mouse` 드래그, 실제 터치는 실기기로 확인한다
 - E2E는 DB를 공유한다. 테스트마다 다른 Day 번호를 쓴다
+- 커스텀 묶음은 사진 등록으로만 생긴다. E2E에서 미리 만들 때는 `seedCustom`(가짜 OpenAI 초안을 거쳐 등록)을 쓴다
 - 사진 등록의 백그라운드 처리(`runImport`)는 아무도 기다리지 않는다. 예외를 새게 두면 처리되지 않은 거부로 서버가 꺼진다
 - 묶음 칩 라디오는 라벨이 덮고 있다. E2E에서는 `check()` 대신 라벨 글자를 누른다
 - 실제 단어 DB는 devserver에 있다. Claude Code 등록·수정 API는 `https://voca.hwchoi.com`으로 보낸다. Mac `data/`는 개발 DB다

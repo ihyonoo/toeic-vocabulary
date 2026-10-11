@@ -33,7 +33,7 @@
 						<a href="/imports/{draft.id}">
 							<!-- Day 행과 이름이 겹치지 않게 앞에 붙인다 -->
 							<span class="sr-only">사진 등록 초안</span>
-							<span class="draft-title">{dayLabel(draft.day)} · {sectionLabel(draft.section)}</span>
+							<span class="draft-title">{dayLabel(draft.day)} · {sectionLabel(draft.section, draft.customName)}</span>
 							<span class="draft-status" class:ready={draft.status === 'ready'} class:failed={draft.status === 'failed'}>
 								{draftStatus(draft)}
 							</span>

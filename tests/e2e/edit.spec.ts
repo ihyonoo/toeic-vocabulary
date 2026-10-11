@@ -38,7 +38,7 @@ test('행의 숨기기 버튼을 누르면 맨 아래 숨긴 단어 묶음으로
 	await expect(hiddenHeading).toHaveCount(0);
 
 	await rows.filter({ hasText: 'beta508' }).getByRole('button', { name: '숨기기' }).click();
-	await expect(page.getByRole('heading', { name: /수업 단어/ })).toContainText('2');
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('2');
 	await expect(hiddenHeading).toContainText('1');
 	await expect(rows).toHaveText([/alpha508/, /gamma508/, /mine508/, /beta508/]);
 	// 따로 모였으니 흐리게 하지 않는다
@@ -49,7 +49,7 @@ test('행의 숨기기 버튼을 누르면 맨 아래 숨긴 단어 묶음으로
 	await rows.filter({ hasText: 'beta508' }).getByRole('button', { name: '숨김 해제' }).click();
 	await expect(rows).toHaveText([/alpha508/, /beta508/, /gamma508/, /mine508/]);
 	await expect(hiddenHeading).toHaveCount(0);
-	await expect(page.getByRole('heading', { name: /수업 단어/ })).toContainText('3');
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('3');
 });
 
 test('행을 왼쪽으로 밀어 나온 숨기기도 숨긴 단어 묶음으로 옮긴다 (R-20)', async ({ page, request }) => {
@@ -147,7 +147,7 @@ test('단어 추가로 영어·뜻을 넣으면 내 단어 끝에 붙고, 이미
 	await sheet.getByLabel('영어').fill('Orbit');
 	await sheet.getByLabel('뜻').fill('궤도');
 	await sheet.getByRole('button', { name: '추가' }).click();
-	await expect(sheet.getByText('이 Day의 수업 단어에 이미 있어요.')).toBeVisible();
+	await expect(sheet.getByText('이 Day의 숙제 단어에 이미 있어요.')).toBeVisible();
 });
 
 test('단어 수정 API는 409와 정규화된 값을, Day 삭제 API는 지운 단어 수를 돌려준다 (R-7, R-8)', async ({

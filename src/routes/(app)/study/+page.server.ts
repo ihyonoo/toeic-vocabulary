@@ -40,8 +40,17 @@ export const load: PageServerLoad = ({ url }) => {
 	const scope = url.searchParams.get('scope') as StudyScope;
 	const order = url.searchParams.get('order') as Order;
 	const repeat = REPEATS[url.searchParams.get('repeat') ?? ''];
-	const group = (url.searchParams.get('group') ?? 'all') as StudyGroup;
-	if (!SCOPES.includes(scope) || !ORDERS.includes(order) || repeat === undefined || !GROUPS.includes(group)) {
+	const groupRaw = url.searchParams.get('group') ?? 'all';
+	// 커스텀 묶음은 Day 학습에서만 이름으로 고른다 (docs/design/2026-10-11-custom-sections.md)
+	const customName = groupRaw === 'custom' ? url.searchParams.get('name') : null;
+	const group = (customName === null ? groupRaw : 'all') as StudyGroup;
+	if (
+		!SCOPES.includes(scope) ||
+		!ORDERS.includes(order) ||
+		repeat === undefined ||
+		!GROUPS.includes(group) ||
+		(groupRaw === 'custom' && (customName === null || scope !== 'day'))
+	) {
 		error(400, INVALID);
 	}
 
@@ -54,7 +63,12 @@ export const load: PageServerLoad = ({ url }) => {
 		if (!/^\d+$/.test(raw) || day < 1) error(400, INVALID);
 		const dayWords = getDayWords(db, day);
 		if (!dayWords) error(404, 'Day를 찾을 수 없어요.');
-		words = group === 'all' ? dayWords : dayWords.filter((w) => w.section === group);
+		words =
+			customName !== null
+				? dayWords.filter((w) => w.customName === customName)
+				: group === 'all'
+					? dayWords
+					: dayWords.filter((w) => w.section === group);
 	} else if (scope === 'all') {
 		words = getAllWords(db, { includeHidden: false, group });
 	} else {

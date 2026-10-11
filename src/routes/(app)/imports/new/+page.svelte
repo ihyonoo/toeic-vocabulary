@@ -4,6 +4,7 @@
 	import CameraIcon from 'phosphor-svelte/lib/CameraIcon';
 	import XIcon from 'phosphor-svelte/lib/XIcon';
 	import type { Section } from '$lib/domain/types';
+	import { cleanCustomName } from '$lib/domain/normalize';
 	import { MAX_PHOTOS } from '$lib/domain/photos';
 	import { ApiError, api } from '$lib/client/api';
 	import { shrinkPhoto } from '$lib/client/photos';
@@ -15,6 +16,7 @@
 	type Picked = { file: File; url: string };
 	let photos = $state<Picked[]>([]);
 	let section = $state<Section>('class');
+	let customName = $state('');
 	let dayText = $state('');
 	let notice = $state('');
 	let pending = $state(false);
@@ -25,11 +27,16 @@
 
 	const day = $derived(/^\d+$/.test(dayText.trim()) ? Number(dayText.trim()) : NaN);
 	const dayValid = $derived(Number.isSafeInteger(day) && day >= 1);
-	const canUpload = $derived(data.enabled && photos.length > 0 && dayValid && !pending);
+	const nameValid = $derived(section !== 'custom' || cleanCustomName(customName) !== null);
+	const canUpload = $derived(data.enabled && photos.length > 0 && dayValid && nameValid && !pending);
 
-	// 수업 단어는 다음 번호를 제안하고, 내 단어는 매번 직접 넣는다 (R-47)
+	// 숙제 단어는 다음 번호를 제안하고, 내 단어·다른 묶음은 매번 직접 넣는다 (R-47)
+	// 내 단어와 다른 묶음 사이를 오가면 넣은 번호를 둔다
+	let previous: Section = 'class';
 	function changeSection(next: Section) {
-		dayText = next === 'class' ? String(data.nextDay) : '';
+		if (next === 'class') dayText = String(data.nextDay);
+		else if (previous === 'class') dayText = '';
+		previous = next;
 	}
 
 	function addPhotos(event: Event) {
@@ -60,7 +67,7 @@
 		notice = '';
 		// 누른 시점의 사진·번호·묶음을 보낸다
 		const files = photos.map((p) => p.file);
-		const target = { day, section };
+		const target = { day, section, ...(section === 'custom' && { customName }) };
 		try {
 			const encoded: string[] = [];
 			for (const file of files) encoded.push(await shrinkPhoto(file));
@@ -123,7 +130,13 @@
 
 	<section>
 		<h2>묶음</h2>
-		<SectionChips bind:value={section} disabled={pending} onchange={changeSection} />
+		<SectionChips
+			bind:value={section}
+			bind:customName
+			names={dayValid ? (data.customSections[day] ?? []) : []}
+			disabled={pending}
+			onchange={changeSection}
+		/>
 	</section>
 
 	<section>
@@ -133,7 +146,7 @@
 			class="day"
 			inputmode="numeric"
 			autocomplete="off"
-			placeholder={section === 'mine' ? '번호를 넣어 주세요' : ''}
+			placeholder={section === 'class' ? '' : '번호를 넣어 주세요'}
 			disabled={pending}
 			bind:value={dayText}
 		/>

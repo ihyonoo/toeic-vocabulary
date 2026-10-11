@@ -61,9 +61,48 @@ CREATE TABLE drafts (
 );
 `;
 
+// 커스텀 묶음 (docs/design/2026-10-11-custom-sections.md)
+// SQLite는 CHECK를 못 바꿔 두 테이블을 다시 만든다
+// day_words를 가리키는 FK는 없다
+const SCHEMA_V4 = `
+CREATE TABLE day_words_v4 (
+  day_number  INTEGER NOT NULL REFERENCES days(number) ON DELETE CASCADE,
+  word_id     INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+  position    INTEGER NOT NULL,
+  section     TEXT NOT NULL DEFAULT 'class' CHECK (section IN ('class', 'mine', 'custom')),
+  custom_name TEXT,
+  CHECK ((section = 'custom') = (custom_name IS NOT NULL)),
+  PRIMARY KEY (day_number, word_id),
+  UNIQUE (day_number, position)
+);
+INSERT INTO day_words_v4 (day_number, word_id, position, section)
+  SELECT day_number, word_id, position, section FROM day_words;
+DROP TABLE day_words;
+ALTER TABLE day_words_v4 RENAME TO day_words;
+CREATE INDEX day_words_word_id ON day_words(word_id);
+
+CREATE TABLE drafts_v4 (
+  id          INTEGER PRIMARY KEY,
+  day_number  INTEGER NOT NULL CHECK (day_number >= 1),
+  section     TEXT NOT NULL CHECK (section IN ('class', 'mine', 'custom')),
+  custom_name TEXT,
+  status      TEXT NOT NULL CHECK (status IN ('processing', 'ready', 'failed')),
+  photo_count INTEGER NOT NULL,
+  items       TEXT NOT NULL DEFAULT '[]',
+  error       TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  CHECK ((section = 'custom') = (custom_name IS NOT NULL))
+);
+INSERT INTO drafts_v4 (id, day_number, section, status, photo_count, items, error, created_at, updated_at)
+  SELECT id, day_number, section, status, photo_count, items, error, created_at, updated_at FROM drafts;
+DROP TABLE drafts;
+ALTER TABLE drafts_v4 RENAME TO drafts;
+`;
+
 // 인덱스 i가 버전 i → i+1 마이그레이션
 // 테스트가 이전 버전 DB를 만들 수 있게 내보낸다
-export const MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3];
+export const MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4];
 
 function migrate(db: DatabaseSync) {
 	const row = db.prepare('PRAGMA user_version').get() as { user_version: number };

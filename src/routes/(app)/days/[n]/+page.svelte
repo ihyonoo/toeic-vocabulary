@@ -24,6 +24,14 @@
 	const classCount = $derived(words.filter(isClass).length);
 	const mineCount = $derived(words.filter(isMine).length);
 	const hiddenCount = $derived(words.filter(isHidden).length);
+	// 커스텀 묶음은 숨기지 않은 단어가 있을 때만 보인다
+	// 서버가 만든 순서로 준다 (docs/design/2026-10-11-custom-sections.md)
+	const customGroups = $derived(
+		[...new Set(words.filter((w) => !w.hidden && w.customName !== null).map((w) => w.customName!))].map((name) => {
+			const visible = (w: Word) => !w.hidden && (w as DayWord).customName === name;
+			return { name, visible, count: words.filter(visible).length };
+		})
+	);
 
 	let studyOpen = $state(false);
 	let addOpen = $state(false);
@@ -63,7 +71,7 @@
 
 <main>
 	<section class="group">
-		<h2>수업 단어 <span class="count">{classCount}</span></h2>
+		<h2>숙제 단어 <span class="count">{classCount}</span></h2>
 		{#if classCount === 0}
 			<p class="empty">아직 없어요</p>
 		{:else}
@@ -82,6 +90,12 @@
 			단어 추가
 		</button>
 	</section>
+	{#each customGroups as group (group.name)}
+		<section class="group">
+			<h2>{group.name} <span class="count">{group.count}</span></h2>
+			<WordList bind:words visible={group.visible} {cardHref} />
+		</section>
+	{/each}
 	{#if hiddenCount > 0}
 		<section class="group hidden-group">
 			<h2>숨긴 단어 <span class="count">{hiddenCount}</span></h2>
@@ -99,7 +113,12 @@
 	onclose={() => (studyOpen = false)}
 	scope="day"
 	day={data.day}
-	studyableCounts={{ all: classCount + mineCount, class: classCount, mine: mineCount }}
+	studyableCounts={{
+		all: classCount + mineCount + customGroups.reduce((n, g) => n + g.count, 0),
+		class: classCount,
+		mine: mineCount
+	}}
+	customGroups={customGroups.map(({ name, count }) => ({ name, count }))}
 />
 
 <WordFormSheet

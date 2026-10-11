@@ -2,6 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { Draft, DraftItem, ImportResult } from '$lib/domain/types';
 	import { dayLabel, sectionLabel } from '$lib/domain/format';
+	import { CUSTOM_NAME_RULE, cleanCustomName } from '$lib/domain/normalize';
 	import { ApiError, api } from '$lib/client/api';
 	import { showToast } from '$lib/client/toast.svelte';
 	import BottomSheet from '$lib/components/BottomSheet.svelte';
@@ -14,11 +15,13 @@
 	let draft = $state<Draft | null>(null);
 	let dayText = $state('');
 	let dayError = $state('');
+	let customName = $state('');
 
 	function adopt(next: Draft) {
 		draft = next;
 		dayText = String(next.day);
 		dayError = '';
+		customName = next.customName ?? '';
 	}
 
 	$effect.pre(() => {
@@ -27,6 +30,11 @@
 
 	const day = $derived(/^\d+$/.test(dayText.trim()) ? Number(dayText.trim()) : NaN);
 	const dayValid = $derived(Number.isSafeInteger(day) && day >= 1);
+	const nameValid = $derived(draft?.section !== 'custom' || cleanCustomName(customName) !== null);
+
+	function target(d: Draft) {
+		return { section: d.section, customName: d.section === 'custom' ? customName : null };
+	}
 
 	// 처리가 끝나면 다시 열지 않아도 화면이 바뀐다 (R-59)
 	$effect(() => {
@@ -75,10 +83,11 @@
 	// 응답 순서가 뒤바뀌어 옛 내용이 이기지 않게 하나씩 보낸다
 	let saving: Promise<void> = Promise.resolve();
 
+	// 쓸 수 없는 묶음 이름이면 칩 아래에 이유가 보이고, 고칠 때까지 저장하지 않는다
 	function save() {
-		if (!draft) return;
+		if (!draft || !nameValid) return;
 		const id = draft.id;
-		const body = { day: draft.day, section: draft.section, items: $state.snapshot(draft.items) };
+		const body = { day: draft.day, ...target(draft), items: $state.snapshot(draft.items) };
 		saving = saving.then(() =>
 			api.saveImport(id, body).then(
 				() => {},
@@ -126,6 +135,10 @@
 			dayError = 'Day 번호는 1 이상의 정수여야 해요.';
 			return;
 		}
+		if (!nameValid) {
+			commitError = CUSTOM_NAME_RULE;
+			return;
+		}
 		const blank = draft.items.findIndex((i) => !i.english.trim() || !i.meaning.trim());
 		if (blank >= 0) {
 			commitError = '영어와 뜻이 빈 단어가 있어요.';
@@ -135,7 +148,7 @@
 		committing = true;
 		commitError = '';
 		const id = draft.id;
-		const body = { day, section: draft.section, items: $state.snapshot(draft.items) };
+		const body = { day, ...target(draft), items: $state.snapshot(draft.items) };
 		// 등록 뒤 늦게 도착한 저장이 없는 초안에 404를 받지 않게 기다린다
 		await saving;
 		try {
@@ -196,7 +209,7 @@
 		<main class="state">
 			<p class="headline">AI가 단어를 읽고 있어요</p>
 			<p class="elapsed">{elapsed}</p>
-			<p class="sub">{dayLabel(draft.day)} · {sectionLabel(draft.section)}</p>
+			<p class="sub">{dayLabel(draft.day)} · {sectionLabel(draft.section, draft.customName)}</p>
 			<p class="sub">앱을 닫아도 계속 처리돼요.</p>
 		</main>
 	{:else if draft.status === 'failed'}
@@ -219,7 +232,14 @@
 					onchange={changeDay}
 				/>
 				<p class="field-error" aria-live="polite">{dayError}</p>
-				<SectionChips bind:value={draft.section} disabled={committing} onchange={save} />
+				<SectionChips
+					bind:value={draft.section}
+					bind:customName
+					names={dayValid ? (data.customSections[day] ?? []) : []}
+					disabled={committing}
+					onchange={save}
+					onnamechange={save}
+				/>
 			</div>
 
 			<p class="count" data-testid="item-count">{draft.items.length}단어</p>

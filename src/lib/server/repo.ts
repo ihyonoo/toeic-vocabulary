@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { englishKey, normalizeEnglish, normalizeMeaning } from '$lib/domain/normalize';
+import { CUSTOM_NAME_RULE, cleanCustomName, englishKey, normalizeEnglish, normalizeMeaning } from '$lib/domain/normalize';
 import type {
+	BaseSection,
 	DaySummary,
 	DayWord,
 	Draft,
@@ -48,14 +49,19 @@ type WordRow = {
 	sections: string | null;
 };
 
-const SECTIONS: Section[] = ['class', 'mine'];
-const SECTION_LABEL: Record<Section, string> = { class: '수업 단어', mine: '내 단어' };
+const SECTIONS: BaseSection[] = ['class', 'mine'];
+const SECTION_LABEL: Record<BaseSection, string> = { class: '숙제 단어', mine: '내 단어' };
+
+// 단어가 그 Day에서 놓일 묶음
+type Place = { section: Section; customName: string | null };
 
 const WORD_COLUMNS = `w.id, w.english, w.meaning, w.pos, w.example, w.example_ko, w.bookmarked, w.hidden,
 	(SELECT group_concat(DISTINCT section) FROM day_words WHERE word_id = w.id) AS sections`;
 
-// Day 안 순서와 통합 교재순에서 수업 단어를 내 단어보다 앞에 둔다
-const SECTION_RANK = "CASE section WHEN 'class' THEN 0 ELSE 1 END";
+// Day 안 순서와 통합 교재순: 숙제 단어 → 내 단어 → 커스텀 묶음
+function sectionRank(column: string): string {
+	return `CASE ${column} WHEN 'class' THEN 0 WHEN 'mine' THEN 1 ELSE 2 END`;
+}
 
 function toWord(row: WordRow): Word {
 	const sections = row.sections?.split(',') ?? [];
@@ -72,8 +78,10 @@ function toWord(row: WordRow): Word {
 	};
 }
 
-function toDayWord(row: WordRow & { section: Section }): DayWord {
-	return { ...toWord(row), section: row.section };
+type DayWordRow = WordRow & { section: Section; custom_name: string | null };
+
+function toDayWord(row: DayWordRow): DayWord {
+	return { ...toWord(row), section: row.section, customName: row.custom_name };
 }
 
 function toRef(word: { id: number; english: string; meaning: string }): WordRef {
@@ -99,19 +107,24 @@ function findWord(db: DatabaseSync, english: string, meaning: string): WordRow |
 }
 
 // 그 Day에 속해 있으면 묶음을, 아니면 undefined를 돌려준다
-function sectionInDay(db: DatabaseSync, day: number, wordId: number): Section | undefined {
+function placeInDay(db: DatabaseSync, day: number, wordId: number): Place | undefined {
 	const row = db
-		.prepare('SELECT section FROM day_words WHERE day_number = ? AND word_id = ?')
-		.get(day, wordId) as { section: Section } | undefined;
-	return row?.section;
+		.prepare('SELECT section, custom_name AS customName FROM day_words WHERE day_number = ? AND word_id = ?')
+		.get(day, wordId) as Place | undefined;
+	return row && { section: row.section, customName: row.customName };
+}
+
+function placeLabel(place: Place): string {
+	return place.customName ?? SECTION_LABEL[place.section as BaseSection];
 }
 
 const NEXT_POSITION = 'SELECT COALESCE(MAX(position), 0) + 1 FROM day_words WHERE day_number = ?';
 
-function appendToDay(db: DatabaseSync, day: number, wordId: number, section: Section) {
+function appendToDay(db: DatabaseSync, day: number, wordId: number, place: Place) {
 	db.prepare(
-		`INSERT INTO day_words (day_number, word_id, position, section) SELECT ?, ?, (${NEXT_POSITION}), ?`
-	).run(day, wordId, day, section);
+		`INSERT INTO day_words (day_number, word_id, position, section, custom_name)
+		 SELECT ?, ?, (${NEXT_POSITION}), ?, ?`
+	).run(day, wordId, day, place.section, place.customName);
 }
 
 // 기존 값은 유지하고 빈 칸만 채운다
@@ -125,16 +138,42 @@ function fillBlanks(db: DatabaseSync, id: number, item: { pos: string; example: 
 	).run(item.pos, item.example, item.exampleKo, id);
 }
 
-function isSection(value: unknown): value is Section {
+function isBaseSection(value: unknown): value is BaseSection {
 	return value === 'class' || value === 'mine';
+}
+
+const BASE_SECTION_RULE = "section은 'class'나 'mine'이어야 해요.";
+
+// 커스텀 묶음은 사진 등록(초안)에서만 받는다
+function cleanPlace(section: unknown, customName: unknown, allowCustom: boolean): Place {
+	if (allowCustom && section === 'custom') {
+		const name = cleanCustomName(customName);
+		if (name === null) throw new RepoError('invalid_request', CUSTOM_NAME_RULE);
+		return { section, customName: name };
+	}
+	if (!isBaseSection(section)) {
+		throw new RepoError(
+			'invalid_request',
+			allowCustom ? "section은 'class', 'mine', 'custom' 중 하나여야 해요." : BASE_SECTION_RULE
+		);
+	}
+	if (customName !== undefined && customName !== null) {
+		throw new RepoError('invalid_request', '숙제 단어와 내 단어에는 묶음 이름을 붙이지 않아요.');
+	}
+	return { section, customName: null };
 }
 
 type CleanItem = { english: string; meaning: string; pos: string; example: string; exampleKo: string };
 
-function cleanImport(input: unknown): { day: number; section: Section; words: CleanItem[] } {
-	const { day, words, section = 'class' } = (input ?? {}) as Partial<ImportInput>;
+function cleanImport(input: unknown): { day: number; place: Place; words: CleanItem[] } {
+	const { day, words, section = 'class', customName } = (input ?? {}) as Partial<ImportInput> & {
+		customName?: unknown;
+	};
 	if (!isPositiveInt(day)) throw new RepoError('invalid_request', 'Day 번호는 1 이상의 정수여야 해요.');
-	if (!isSection(section)) throw new RepoError('invalid_request', "section은 'class'나 'mine'이어야 해요.");
+	return { day, place: cleanPlace(section, customName, false), words: cleanWords(words) };
+}
+
+function cleanWords(words: unknown): CleanItem[] {
 	if (!Array.isArray(words) || words.length === 0) {
 		throw new RepoError('invalid_request', '단어 목록이 비어 있어요.');
 	}
@@ -159,7 +198,7 @@ function cleanImport(input: unknown): { day: number; section: Section; words: Cl
 	if (bad.length > 0) {
 		throw new RepoError('invalid_request', `잘못된 항목이 있어요 (인덱스: ${bad.join(', ')}).`);
 	}
-	return { day, section, words: cleaned };
+	return cleaned;
 }
 
 export function importDay(db: DatabaseSync, input: ImportInput): ImportResult {
@@ -171,7 +210,7 @@ export function importDay(db: DatabaseSync, input: ImportInput): ImportResult {
 // 초안 등록이 초안 삭제와 한 트랜잭션으로 묶는다
 function importClean(
 	db: DatabaseSync,
-	{ day, section, words }: { day: number; section: Section; words: CleanItem[] }
+	{ day, place, words }: { day: number; place: Place; words: CleanItem[] }
 ): ImportResult {
 	const result: ImportResult = { day, created: [], linked: [], skipped: [], moved: [] };
 
@@ -179,14 +218,14 @@ function importClean(
 
 	for (const item of words) {
 		const existing = findWord(db, item.english, item.meaning);
-		const current = existing && sectionInDay(db, day, existing.id);
-		if (existing && current === 'mine' && section === 'class') {
-			// 종이가 우선한다
-			// 내 단어였던 것을 이번 종이 순서 끝의 수업 단어로 옮긴다
+		const current = existing && placeInDay(db, day, existing.id);
+		if (existing && current?.section === 'mine' && place.section !== 'mine') {
+			// 종이(숙제 단어·커스텀 묶음)가 우선한다
+			// 내 단어였던 것을 이번 종이 순서 끝으로 옮긴다
 			db.prepare(
-				`UPDATE day_words SET section = 'class', position = (${NEXT_POSITION})
+				`UPDATE day_words SET section = ?, custom_name = ?, position = (${NEXT_POSITION})
 				 WHERE day_number = ? AND word_id = ?`
-			).run(day, day, existing.id);
+			).run(place.section, place.customName, day, day, existing.id);
 			fillBlanks(db, existing.id, item);
 			result.moved.push(toRef(existing));
 			continue;
@@ -197,7 +236,7 @@ function importClean(
 		}
 		if (existing) {
 			fillBlanks(db, existing.id, item);
-			appendToDay(db, day, existing.id, section);
+			appendToDay(db, day, existing.id, place);
 			result.linked.push(toRef(existing));
 			continue;
 		}
@@ -215,7 +254,7 @@ function importClean(
 				item.exampleKo,
 				now()
 			) as { id: number };
-		appendToDay(db, day, created.id, section);
+		appendToDay(db, day, created.id, place);
 		result.created.push({ id: created.id, english: item.english, meaning: item.meaning });
 	}
 	return result;
@@ -245,25 +284,40 @@ export function countStudyableWords(db: DatabaseSync): Record<StudyGroup, number
 	return { all: row.total, class: row.class_n, mine: row.mine_n };
 }
 
-const DAY_WORD_SELECT = `SELECT ${WORD_COLUMNS}, dw.section AS section
+const DAY_WORD_SELECT = `SELECT ${WORD_COLUMNS}, dw.section AS section, dw.custom_name AS custom_name
 	FROM day_words dw JOIN words w ON w.id = dw.word_id`;
 
+// 커스텀 묶음끼리는 만든 순서(그 묶음의 가장 작은 위치)다
 export function getDayWords(db: DatabaseSync, day: number): DayWord[] | null {
 	if (!dayExists(db, day)) return null;
 	const rows = db
 		.prepare(
 			`${DAY_WORD_SELECT} WHERE dw.day_number = ?
-			 ORDER BY CASE dw.section WHEN 'class' THEN 0 ELSE 1 END, dw.position`
+			 ORDER BY ${sectionRank('dw.section')},
+			   MIN(dw.position) OVER (PARTITION BY dw.section, dw.custom_name), dw.position`
 		)
-		.all(day) as (WordRow & { section: Section })[];
+		.all(day) as DayWordRow[];
 	return rows.map(toDayWord);
 }
 
 function getDayWord(db: DatabaseSync, day: number, wordId: number): DayWord | null {
 	const row = db
 		.prepare(`${DAY_WORD_SELECT} WHERE dw.day_number = ? AND dw.word_id = ?`)
-		.get(day, wordId) as (WordRow & { section: Section }) | undefined;
+		.get(day, wordId) as DayWordRow | undefined;
 	return row ? toDayWord(row) : null;
+}
+
+// Day마다 커스텀 묶음 이름, 만든 순서
+export function listCustomSections(db: DatabaseSync): Record<number, string[]> {
+	const rows = db
+		.prepare(
+			`SELECT day_number AS day, custom_name AS name FROM day_words WHERE section = 'custom'
+			 GROUP BY day_number, custom_name ORDER BY day_number, MIN(position)`
+		)
+		.all() as { day: number; name: string }[];
+	const out: Record<number, string[]> = {};
+	for (const { day, name } of rows) (out[day] ??= []).push(name);
+	return out;
 }
 
 function getWord(db: DatabaseSync, id: number): Word | null {
@@ -282,8 +336,8 @@ function orderedWords(
 	const rows = db
 		.prepare(
 			`SELECT ${WORD_COLUMNS} FROM words w
-			 JOIN (SELECT word_id, day_number, ${SECTION_RANK} AS rank, position,
-			         ROW_NUMBER() OVER (PARTITION BY word_id ORDER BY day_number, ${SECTION_RANK}, position) AS nth
+			 JOIN (SELECT word_id, day_number, ${sectionRank('section')} AS rank, position,
+			         ROW_NUMBER() OVER (PARTITION BY word_id ORDER BY day_number, ${sectionRank('section')}, position) AS nth
 			       FROM day_words WHERE ? = 'all' OR section = ?) f ON f.word_id = w.id AND f.nth = 1
 			 WHERE ${where} ORDER BY f.day_number, f.rank, f.position`
 		)
@@ -380,15 +434,16 @@ export function addWordToDay(
 	return tx(db, () => {
 		if (!dayExists(db, day)) throw new RepoError('day_not_found', 'Day를 찾을 수 없어요.');
 		const existing = findWord(db, english, meaning);
-		const current = existing && sectionInDay(db, day, existing.id);
+		const current = existing && placeInDay(db, day, existing.id);
 		if (current) {
-			throw new RepoError('already_in_day', `이 Day의 ${SECTION_LABEL[current]}에 이미 있어요.`);
+			throw new RepoError('already_in_day', `이 Day의 ${placeLabel(current)}에 이미 있어요.`);
 		}
 		// 앱에서 추가하는 단어는 언제나 내 단어다
+		const mine: Place = { section: 'mine', customName: null };
 		if (existing) {
 			// 직접 추가는 다시 외우겠다는 뜻이라 숨김을 푼다
 			db.prepare('UPDATE words SET hidden = 0 WHERE id = ?').run(existing.id);
-			appendToDay(db, day, existing.id, 'mine');
+			appendToDay(db, day, existing.id, mine);
 			return { word: getDayWord(db, day, existing.id)!, result: 'linked' as const };
 		}
 		const { id } = db
@@ -396,19 +451,24 @@ export function addWordToDay(
 				`INSERT INTO words (english, english_key, meaning, created_at) VALUES (?, ?, ?, ?) RETURNING id`
 			)
 			.get(english, englishKey(english), meaning, now()) as { id: number };
-		appendToDay(db, day, id, 'mine');
+		appendToDay(db, day, id, mine);
 		return { word: getDayWord(db, day, id)!, result: 'created' as const };
 	});
 }
 
 // Claude가 잘못 넣은 묶음을 바로잡을 때 쓴다
-export function setSection(db: DatabaseSync, day: number, wordId: number, section: Section): DayWord {
-	if (!isSection(section)) throw new RepoError('invalid_request', "section은 'class'나 'mine'이어야 해요.");
+// 커스텀 묶음으로는 옮기지 않는다
+export function setSection(db: DatabaseSync, day: number, wordId: number, section: BaseSection): DayWord {
+	if (!isBaseSection(section)) throw new RepoError('invalid_request', BASE_SECTION_RULE);
 	return tx(db, () => {
-		if (!sectionInDay(db, day, wordId)) {
+		if (!placeInDay(db, day, wordId)) {
 			throw new RepoError('word_not_found', '그 Day에서 단어를 찾을 수 없어요.');
 		}
-		db.prepare('UPDATE day_words SET section = ? WHERE day_number = ? AND word_id = ?').run(section, day, wordId);
+		db.prepare('UPDATE day_words SET section = ?, custom_name = NULL WHERE day_number = ? AND word_id = ?').run(
+			section,
+			day,
+			wordId
+		);
 		return getDayWord(db, day, wordId)!;
 	});
 }
@@ -438,6 +498,7 @@ type DraftRow = {
 	id: number;
 	day_number: number;
 	section: Section;
+	custom_name: string | null;
 	status: Draft['status'];
 	items: string;
 	error: string | null;
@@ -452,6 +513,7 @@ function toDraft(row: DraftRow): Draft {
 		id: row.id,
 		day: row.day_number,
 		section: row.section,
+		customName: row.custom_name,
 		status: row.status,
 		itemCount: items.length,
 		error: row.error,
@@ -470,17 +532,18 @@ function draftRow(db: DatabaseSync, id: number): DraftRow {
 	return row;
 }
 
+// 올리기에서 검증한 값을 받는다
 export function createDraft(
 	db: DatabaseSync,
-	input: { day: number; section: Section; photoCount: number }
+	input: { day: number; section: Section; customName?: string | null; photoCount: number }
 ): DraftSummary {
 	const at = now();
 	const row = db
 		.prepare(
-			`INSERT INTO drafts (day_number, section, status, photo_count, created_at, updated_at)
-			 VALUES (?, ?, 'processing', ?, ?, ?) RETURNING *`
+			`INSERT INTO drafts (day_number, section, custom_name, status, photo_count, created_at, updated_at)
+			 VALUES (?, ?, ?, 'processing', ?, ?, ?) RETURNING *`
 		)
-		.get(input.day, input.section, input.photoCount, at, at) as DraftRow;
+		.get(input.day, input.section, input.customName ?? null, input.photoCount, at, at) as DraftRow;
 	return toSummary(toDraft(row));
 }
 
@@ -539,10 +602,10 @@ function isDraftItem(value: unknown): value is DraftItem {
 }
 
 // 편집 중이라 빈 영어·뜻을 허용한다
-function cleanDraftInput(input: unknown): DraftInput {
-	const { day, section, items } = (input ?? {}) as Partial<DraftInput>;
+function cleanDraftInput(input: unknown): { day: number; place: Place; items: DraftItem[] } {
+	const { day, section, customName, items } = (input ?? {}) as Partial<DraftInput>;
 	if (!isPositiveInt(day)) throw new RepoError('invalid_request', 'Day 번호는 1 이상의 정수여야 해요.');
-	if (!isSection(section)) throw new RepoError('invalid_request', "section은 'class'나 'mine'이어야 해요.");
+	const place = cleanPlace(section, customName, true);
 	if (!Array.isArray(items) || !items.every(isDraftItem)) {
 		throw new RepoError('invalid_request', '단어 목록이 잘못됐어요.');
 	}
@@ -555,7 +618,7 @@ function cleanDraftInput(input: unknown): DraftInput {
 		paperEnglish: i.paperEnglish,
 		meaningFilled: i.meaningFilled
 	}));
-	return { day, section, items: cleaned };
+	return { day, place, items: cleaned };
 }
 
 function readyRow(db: DatabaseSync, id: number): DraftRow {
@@ -565,16 +628,12 @@ function readyRow(db: DatabaseSync, id: number): DraftRow {
 }
 
 export function saveDraft(db: DatabaseSync, id: number, input: unknown): Draft {
-	const { day, section, items } = cleanDraftInput(input);
+	const { day, place, items } = cleanDraftInput(input);
 	return tx(db, () => {
 		readyRow(db, id);
-		db.prepare('UPDATE drafts SET day_number = ?, section = ?, items = ?, updated_at = ? WHERE id = ?').run(
-			day,
-			section,
-			JSON.stringify(items),
-			now(),
-			id
-		);
+		db.prepare(
+			'UPDATE drafts SET day_number = ?, section = ?, custom_name = ?, items = ?, updated_at = ? WHERE id = ?'
+		).run(day, place.section, place.customName, JSON.stringify(items), now(), id);
 		return getDraft(db, id);
 	});
 }
@@ -582,8 +641,8 @@ export function saveDraft(db: DatabaseSync, id: number, input: unknown): Draft {
 // 저장된 items가 아니라 보낸 내용으로 등록한다
 // 마지막 저장 요청과 경쟁하지 않는다
 export function commitDraft(db: DatabaseSync, id: number, input: unknown): ImportResult {
-	const { day, section, items } = cleanDraftInput(input);
-	const clean = cleanImport({ day, section, words: items });
+	const { day, place, items } = cleanDraftInput(input);
+	const clean = { day, place, words: cleanWords(items) };
 	return tx(db, () => {
 		readyRow(db, id);
 		const result = importClean(db, clean);

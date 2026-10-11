@@ -43,7 +43,7 @@ export const api = {
 		request<{ word: DayWord; result: 'created' | 'linked' }>('POST', `/api/days/${day}/words`, input),
 	recordStudy: (day: number) =>
 		request<{ studyCount: number; lastStudiedOn: string }>('POST', `/api/days/${day}/study-log`),
-	createImport: (input: { day: number; section: Section; photos: string[] }) =>
+	createImport: (input: { day: number; section: Section; customName?: string; photos: string[] }) =>
 		request<{ draft: DraftSummary }>('POST', '/api/imports', input),
 	getImport: (id: number) => request<{ draft: Draft }>('GET', `/api/imports/${id}`),
 	saveImport: (id: number, input: DraftInput) => request<{ draft: Draft }>('PUT', `/api/imports/${id}`, input),

@@ -1,7 +1,9 @@
-// class: 학원이 나눠 준 종이 단어
+// class: 학원이 나눠 준 종이 단어 (화면 이름은 숙제 단어)
 // mine: 사용자가 정리한 단어
-export type Section = 'class' | 'mine';
-export type StudyGroup = 'all' | Section;
+// custom: 사진 등록에서 만든 그 Day만의 묶음, 이름은 customName (docs/design/2026-10-11-custom-sections.md)
+export type BaseSection = 'class' | 'mine';
+export type Section = BaseSection | 'custom';
+export type StudyGroup = 'all' | BaseSection;
 
 export type Word = {
 	id: number;
@@ -12,12 +14,12 @@ export type Word = {
 	exampleKo: string;
 	bookmarked: boolean;
 	hidden: boolean;
-	// 지금 속한 묶음들, ['class', 'mine'] 순서
-	sections: Section[];
+	// 지금 속한 기본 묶음들, ['class', 'mine'] 순서
+	sections: BaseSection[];
 };
 
 // 그 Day에서의 묶음
-export type DayWord = Word & { section: Section };
+export type DayWord = Word & { section: Section; customName: string | null };
 
 export type DaySummary = {
 	number: number;
@@ -38,14 +40,14 @@ export type ImportItem = {
 	exampleKo?: string;
 };
 
-export type ImportInput = { day: number; section?: Section; words: ImportItem[] };
+export type ImportInput = { day: number; section?: BaseSection; words: ImportItem[] };
 
 export type ImportResult = {
 	day: number;
 	created: WordRef[];
 	linked: WordRef[];
 	skipped: WordRef[];
-	// 같은 Day의 내 단어였다가 종이 등록으로 수업 단어가 된 것
+	// 같은 Day의 내 단어였다가 종이 등록으로 숙제 단어·커스텀 묶음이 된 것
 	moved: WordRef[];
 };
 
@@ -77,6 +79,7 @@ export type DraftSummary = {
 	id: number;
 	day: number;
 	section: Section;
+	customName: string | null;
 	status: DraftStatus;
 	itemCount: number;
 	// failed일 때 사용자에게 보일 이유
@@ -86,4 +89,4 @@ export type DraftSummary = {
 
 export type Draft = DraftSummary & { items: DraftItem[] };
 
-export type DraftInput = { day: number; section: Section; items: DraftItem[] };
+export type DraftInput = { day: number; section: Section; customName?: string | null; items: DraftItem[] };

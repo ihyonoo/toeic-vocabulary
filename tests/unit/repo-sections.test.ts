@@ -70,11 +70,11 @@ describe('겹침 (같은 Day)', () => {
 		importDay(db, { day: 1, section: 'mine', words: [{ english: 'river', meaning: '강' }] });
 	});
 
-	it('수업 단어에 있는 단어를 앱에서 추가하면 409와 묶음을 알린다', () => {
+	it('숙제 단어에 있는 단어를 앱에서 추가하면 409와 묶음을 알린다', () => {
 		expectRepoError(
 			() => addWordToDay(db, 1, { english: 'Apple', meaning: '사과' }),
 			'already_in_day',
-			'이 Day의 수업 단어에 이미 있어요.'
+			'이 Day의 숙제 단어에 이미 있어요.'
 		);
 	});
 

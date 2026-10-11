@@ -4,6 +4,7 @@
 - 상태: 확정 (spec-review 1회, 코드 리뷰 1회 반영)
 - PRD: `docs/prd/2026-10-09-photo-import.md` (R-45~R-68, S-6~S-11)
 - 바탕: `docs/trd/2026-10-07-toeic-vocab-app.md`(이하 MVP TRD), `docs/design/2026-10-08-my-words.md`
+- 10-11 변경: 초안의 `section`에 `custom`과 `customName`이 생겼다(마이그레이션 v4). `docs/design/2026-10-11-custom-sections.md`가 우선한다
 
 ## 1. 개요
 

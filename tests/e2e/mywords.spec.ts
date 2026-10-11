@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { AUTH, login, seedDay } from './helpers';
+import { AUTH, login, seedCustom, seedDay } from './helpers';
 
 test.use({ reducedMotion: 'reduce' });
 
@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
 	await login(page);
 });
 
-test('Day 화면은 수업 단어와 내 단어를 머리줄과 함께 이어서 보여준다', async ({ page, request }) => {
+test('Day 화면은 숙제 단어와 내 단어를 머리줄과 함께 이어서 보여준다', async ({ page, request }) => {
 	await seedDay(request, 911, [{ english: 'mine911', meaning: '내것' }], 'mine');
 	await seedDay(request, 911, [
 		{ english: 'class911a', meaning: '수업가' },
@@ -15,7 +15,7 @@ test('Day 화면은 수업 단어와 내 단어를 머리줄과 함께 이어서
 	]);
 	await page.goto('/days/911');
 
-	await expect(page.getByRole('heading', { name: /수업 단어/ })).toContainText('2');
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('2');
 	await expect(page.getByRole('heading', { name: /내 단어/ })).toContainText('1');
 	const rows = page.getByRole('listitem');
 	await expect(rows).toHaveCount(3);
@@ -41,7 +41,7 @@ test('내 단어가 없으면 머리줄 아래에 아직 없다고 적고, 단�
 	await expect(mineHeading).toContainText('1');
 	await expect(page.getByText('아직 없어요')).toHaveCount(0);
 	await expect(page.getByRole('listitem').last()).toContainText('added912');
-	await expect(page.getByRole('heading', { name: /수업 단어/ })).toContainText('1');
+	await expect(page.getByRole('heading', { name: /숙제 단어/ })).toContainText('1');
 });
 
 test('내 단어에 이미 있는 단어를 추가하면 내 단어에 있다고 알린다', async ({ page, request }) => {
@@ -55,12 +55,47 @@ test('내 단어에 이미 있는 단어를 추가하면 내 단어에 있다고
 	await expect(sheet.getByText('이 Day의 내 단어에 이미 있어요.')).toBeVisible();
 });
 
+test('Day 화면은 숙제 → 내 단어 → 커스텀 묶음 → 숨긴 단어 순서이고, 커스텀 묶음은 숨기지 않은 단어가 없으면 사라진다', async ({
+	page,
+	request
+}) => {
+	await seedDay(request, 962, [{ english: 'class962', meaning: '숙제' }]);
+	await seedCustom(request, 962, '듣기', [{ english: 'listen962', meaning: '듣다' }]);
+	await seedCustom(request, 962, '독해', [{ english: 'read962', meaning: '읽다' }]);
+	await page.goto('/days/962');
+	const headings = page.getByRole('heading', { level: 2 });
+	await expect(headings).toHaveText([/숙제 단어/, /내 단어/, /듣기\s*1/, /독해\s*1/]);
+
+	await page.getByRole('listitem').filter({ hasText: 'listen962' }).getByRole('button', { name: '숨기기' }).click();
+	await expect(headings).toHaveText([/숙제 단어/, /내 단어/, /독해/, /숨긴 단어/]);
+	await expect(page.getByRole('listitem')).toHaveText([/class962/, /read962/, /listen962/]);
+});
+
+test('Day 학습 시트에 커스텀 묶음 칩이 있고, 고르면 그 묶음 단어만 학습한다', async ({ page, request }) => {
+	await seedDay(request, 963, [{ english: 'class963', meaning: '숙제' }]);
+	await seedCustom(request, 963, '독해', [{ english: 'read963', meaning: '읽다' }]);
+	await page.goto('/days/963');
+	await page.getByRole('button', { name: '학습하기' }).click();
+	await expect(page.getByRole('radio', { name: '전체' })).toBeChecked();
+	await page.getByText('독해', { exact: true }).last().click();
+	await page.getByRole('button', { name: '학습 시작' }).click();
+
+	await expect(page).toHaveURL(/group=custom&name=%EB%8F%85%ED%95%B4$/);
+	await expect(page.getByTestId('progress')).toHaveText('1 / 1');
+	await expect(page.getByTestId('card-english')).toHaveText('read963');
+
+	// 커스텀 묶음 선택은 기억하지 않는다
+	await page.goto('/days/963');
+	await page.getByRole('button', { name: '학습하기' }).click();
+	await expect(page.getByRole('radio', { name: '전체' })).toBeChecked();
+});
+
 test('Day 학습에서 묶음을 고르면 그 묶음 단어만 나온다', async ({ page, request }) => {
 	await seedDay(request, 921, [{ english: 'class921', meaning: '수업' }]);
 	await seedDay(request, 921, [{ english: 'mine921', meaning: '내것' }], 'mine');
 	await page.goto('/days/921');
 	await page.getByRole('button', { name: '학습하기' }).click();
-	await expect(page.getByRole('radio', { name: '둘 다' })).toBeChecked();
+	await expect(page.getByRole('radio', { name: '전체' })).toBeChecked();
 	await page.getByText('내 단어', { exact: true }).last().click();
 	await page.getByRole('button', { name: '학습 시작' }).click();
 
@@ -76,7 +111,7 @@ test('Day 학습에서 묶음을 고르면 그 묶음 단어만 나온다', asyn
 	await expect(page.getByTestId('progress')).toHaveText('1 / 2');
 });
 
-test('기억한 묶음에 단어가 없는 Day는 둘 다로 열고, 직접 고르면 이유를 보여준다', async ({ page, request }) => {
+test('기억한 묶음에 단어가 없는 Day는 전체로 열고, 직접 고르면 이유를 보여준다', async ({ page, request }) => {
 	await seedDay(request, 922, [{ english: 'mine922', meaning: '내것' }], 'mine');
 	await seedDay(request, 923, [{ english: 'class923', meaning: '수업' }]);
 
@@ -88,7 +123,7 @@ test('기억한 묶음에 단어가 없는 Day는 둘 다로 열고, 직접 고�
 
 	await page.goto('/days/923');
 	await page.getByRole('button', { name: '학습하기' }).click();
-	await expect(page.getByRole('radio', { name: '둘 다' })).toBeChecked();
+	await expect(page.getByRole('radio', { name: '전체' })).toBeChecked();
 	await expect(page.getByRole('button', { name: '학습 시작' })).toBeEnabled();
 
 	await page.getByText('내 단어', { exact: true }).last().click();
@@ -138,7 +173,7 @@ test('고른 묶음을 기억해 내 단어가 있는 다른 Day에서도 미리
 	await expect(page.getByRole('radio', { name: '내 단어' })).toBeChecked();
 });
 
-test('예전 형식으로 저장된 학습 설정도 순서·반복은 살리고 묶음은 둘 다로 연다', async ({ page, request }) => {
+test('예전 형식으로 저장된 학습 설정도 순서·반복은 살리고 묶음은 전체로 연다', async ({ page, request }) => {
 	await seedDay(request, 927, [{ english: 'old927', meaning: '예전' }]);
 	await page.addInitScript(() => {
 		localStorage.setItem('vocab.studyPrefs', JSON.stringify({ order: 'random', repeat: 2 }));
@@ -147,7 +182,7 @@ test('예전 형식으로 저장된 학습 설정도 순서·반복은 살리고
 	await page.getByRole('button', { name: '학습하기' }).click();
 	await expect(page.getByRole('radio', { name: '랜덤' })).toBeChecked();
 	await expect(page.getByRole('radio', { name: '2회' })).toBeChecked();
-	await expect(page.getByRole('radio', { name: '둘 다' })).toBeChecked();
+	await expect(page.getByRole('radio', { name: '전체' })).toBeChecked();
 });
 
 test('북마크 화면의 학습 설정에서 묶음을 고르면 그 묶음 북마크만 학습한다', async ({ page, request }) => {

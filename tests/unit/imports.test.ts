@@ -54,6 +54,21 @@ describe('올리기 검증', () => {
 		expect(listDrafts(db)).toEqual([]);
 	});
 
+	it('다른 묶음은 정리한 이름으로 초안을 만들고, 쓸 수 없는 이름이면 400이다', async () => {
+		const { draft, done } = startImport(
+			db,
+			{ day: 3, section: 'custom', customName: ' 독해  파트 ', photos: [PHOTO] },
+			opts()
+		);
+		await done;
+		expect(draft).toMatchObject({ section: 'custom', customName: '독해 파트' });
+		expectHttpError(
+			() => startImport(db, { day: 3, section: 'custom', customName: '내 단어', photos: [PHOTO] }, opts()),
+			400,
+			'invalid_request'
+		);
+	});
+
 	it('사진 형식과 크기를 다른 이유로 알린다', () => {
 		const message = (photos: string[]) => {
 			try {

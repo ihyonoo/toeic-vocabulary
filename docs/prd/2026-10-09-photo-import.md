@@ -5,6 +5,7 @@
 - 바탕 문서: `docs/prd/2026-10-07-toeic-vocab-app.md`(이하 MVP PRD), `docs/design/2026-10-08-my-words.md`(이하 내 단어 메모)
 - 요구사항 ID는 MVP PRD와 겹치지 않게 R-45부터, 성공 기준은 S-6부터 붙인다
 - 10-10 변경: 7장의 배포 질문은 `docs/design/2026-10-10-devserver-deploy.md`가 닫았다
+- 10-11 변경: 묶음에 '다른 묶음'(Day별 커스텀 묶음)이 생겼고 '수업 단어'는 '숙제 단어'가 됐다. `docs/design/2026-10-11-custom-sections.md`가 우선한다
 - 이 문서가 바꾸는 바탕 문서 내용: MVP PRD 5장 비목표의 "사진 업로드와 AI·OCR 단어 추출", 6장 제약의 "유료 외부 API를 쓰지 않는다", 7장 열린 질문의 추출 방식. 이 셋은 이 문서가 우선한다
 
 ## 1. 문제와 배경
