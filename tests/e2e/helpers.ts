@@ -5,32 +5,22 @@ export const AUTH = { Authorization: `Bearer ${E2E_PASSWORD}` };
 
 export type Item = { english: string; meaning: string; pos?: string; example?: string; exampleKo?: string };
 
-export async function seedDay(
-	request: APIRequestContext,
-	day: number,
-	words: Item[],
-	section: 'class' | 'mine' = 'class'
-) {
-	const res = await request.post('/api/days', { headers: AUTH, data: { day, section, words } });
-	expect(res.status()).toBe(200);
-	return res.json();
-}
+type Target = { day: number; section: 'class' | 'mine' } | { day: number; section: 'custom'; customName: string };
 
-// 커스텀 묶음은 사진 등록으로만 생긴다
+// 단어는 사진 등록으로만 들어간다
 // 가짜 OpenAI가 그 단어들을 읽은 초안을 만들고 등록한다
-export async function seedCustom(request: APIRequestContext, day: number, customName: string, words: Item[]) {
+async function seedDraft(request: APIRequestContext, target: Target, words: Item[]) {
 	const items = words.map((w) => ({
 		english: w.english,
 		meaning: w.meaning,
-		pos: '명사',
-		example: `The ${w.english}.`,
-		exampleKo: `${w.meaning}.`,
+		pos: w.pos ?? '',
+		example: w.example ?? '',
+		exampleKo: w.exampleKo ?? '',
 		paperEnglish: null,
 		meaningFilled: false
 	}));
 	const scenario = await request.post(`${FAKE_OPENAI}/__scenario`, { data: { words: items } });
 	expect(scenario.status()).toBe(204);
-	const target = { day, section: 'custom', customName };
 	const created = await request.post('/api/imports', {
 		headers: AUTH,
 		data: { ...target, photos: ['data:image/jpeg;base64,AAAA'] }
@@ -43,6 +33,26 @@ export async function seedCustom(request: APIRequestContext, day: number, custom
 	const res = await request.post(`/api/imports/${draft.id}/commit`, { headers: AUTH, data: { ...target, items } });
 	expect(res.status()).toBe(200);
 	return res.json();
+}
+
+export async function seedDay(
+	request: APIRequestContext,
+	day: number,
+	words: Item[],
+	section: 'class' | 'mine' = 'class'
+) {
+	return seedDraft(request, { day, section }, words);
+}
+
+export async function seedCustom(request: APIRequestContext, day: number, customName: string, words: Item[]) {
+	const filled = words.map((w) => ({
+		english: w.english,
+		meaning: w.meaning,
+		pos: '명사',
+		example: `The ${w.english}.`,
+		exampleKo: `${w.meaning}.`
+	}));
+	return seedDraft(request, { day, section: 'custom', customName }, filled);
 }
 
 export function synthetic(prefix: string, count: number): Item[] {

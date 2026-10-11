@@ -74,44 +74,26 @@ npm start
    - 내 단어: 번호를 직접 넣는다
    - 다른 묶음: 번호와 묶음 이름(1~12자, 예: 독해)을 넣는다. 그 Day에만 생기고, 단어가 다 빠지면 없어진다
 3. 서버가 사진마다 OpenAI(`gpt-6.1-sol`)를 불러 단어·품사·뜻·예문·해석을 만든다. 앱을 닫아도 계속 처리되고, 홈의 '사진 등록' 영역에 초안이 남는다
-4. 미리보기에서 고치고 등록한다. 등록 규칙은 아래 Claude 경로와 같다
+4. 미리보기에서 고치고 등록한다
    - "종이: …"는 AI가 철자를 고친 행의 원래 철자, "AI가 채움"은 종이에 없던 뜻
+   - 결과는 새 단어, 다른 Day에서 연결, 이미 있음, 내 단어에서 옮김으로 나뉜다. 겹친 줄은 두 번째부터 이미 있음이다
+   - 내 단어에서 옮김: 같은 Day의 내 단어였다가 종이(숙제 단어·다른 묶음)에 나와 옮긴 단어
 - 서버 로그의 `[import]` 줄에 처리 시간과 토큰 수가 남는다. 비용은 OpenAI 사용량 화면과 맞춰 본다
 
-## 단어 등록 (Claude Code)
+## API로 고치기 (Claude Code)
 
-종이 사진을 Claude Code 대화에 첨부하면 Claude가 아래 절차로 등록합니다. 등록 대상은 서버(`https://voca.hwchoi.com`)입니다. Mac `.env`의 `ORIGIN`은 로컬 개발 주소라 쓰지 않습니다.
+앱에서는 영어와 뜻만 고칩니다. 품사·예문이나 묶음·Day 실수는 Claude Code가 서버(`https://voca.hwchoi.com`) API로 고칩니다. Mac `.env`의 `ORIGIN`은 로컬 개발 주소라 쓰지 않습니다.
 
-1. 묶음을 정한다
-   - 학원이 나눠 준 인쇄물이면 숙제 단어(`"section": "class"`, 생략 가능)
-   - 사용자가 직접 정리한 노트면 내 단어(`"section": "mine"`)
-   - 애매하면 사용자에게 묻는다
-2. 종이 순서대로 `data/import/dayNN.json`을 만든다
-   ```json
-   { "day": 2, "section": "mine", "words": [{ "english": "apple", "meaning": "사과", "pos": "명사", "example": "...", "exampleKo": "..." }] }
-   ```
-   - 품사: 숙어·구는 `구`, 뜻 항목의 품사가 다르면 `동사, 명사`처럼 뜻 순서대로
-   - 종이에서 겹치는 줄도 그대로 넣는다. 중복은 서버가 처리한다
-3. Day 번호를 정한다
-   - 숙제 단어: 사용자가 정한 번호, 없으면 `GET /api/days`의 가장 큰 번호 + 1
-     - 앱에 처리 중이거나 확인 대기인 사진 초안이 있으면 그 번호와 겹칠 수 있다. 사용자에게 확인한다
-   - 내 단어: 매번 사용자에게 번호를 묻는다 (기본값 없음)
-4. 등록한다
-   ```
-   set -a; source .env; set +a
-   curl -sS -X POST "https://voca.hwchoi.com/api/days" -H "Authorization: Bearer $APP_PASSWORD" \
-     -H 'content-type: application/json' --data @data/import/dayNN.json
-   ```
-5. 응답을 종이와 대조해 사용자에게 보고한다
-   - `created + linked + skipped + moved` = 종이 줄 수
-   - `created + linked + moved` = 고유 단어 수
-   - `moved`: 같은 Day의 내 단어였다가 종이에 나와 숙제 단어로 옮긴 단어. 사용자에게 알린다
-6. 고칠 때
-   - 단어 id 찾기: `GET /api/days/{n}` (묶음과 id가 담긴 단어 목록, 주소는 4와 같다)
-   - 예문·품사: `PATCH /api/words/{id}`
-   - 묶음을 잘못 넣었을 때: `PATCH /api/days/{n}/words/{id}` 본문 `{ "section": "class" | "mine" }`. 커스텀 묶음(`section: "custom"`, `customName`)은 앱의 사진 등록에서만 만든다
-   - Day를 잘못 넣었을 때: `DELETE /api/days/{n}` 뒤 다시 등록
-     - 그 Day의 내 단어와 학습 기록, 그 Day에만 있던 단어의 북마크·숨김도 함께 지워진다. 학습을 시작하기 전에만 쓴다
+```
+set -a; source .env; set +a
+curl -sS "https://voca.hwchoi.com/api/days/{n}" -H "Authorization: Bearer $APP_PASSWORD"
+```
+
+- 단어 id 찾기: `GET /api/days/{n}` (묶음과 id가 담긴 단어 목록)
+- 예문·품사: `PATCH /api/words/{id}`
+- 묶음을 잘못 넣었을 때: `PATCH /api/days/{n}/words/{id}` 본문 `{ "section": "class" | "mine" }`. 커스텀 묶음(`section: "custom"`, `customName`)은 앱의 사진 등록에서만 만든다
+- Day를 잘못 넣었을 때: `DELETE /api/days/{n}` 뒤 사진으로 다시 등록
+  - 그 Day의 내 단어와 학습 기록, 그 Day에만 있던 단어의 북마크·숨김도 함께 지워진다. 학습을 시작하기 전에만 쓴다
 
 ## 테스트
 

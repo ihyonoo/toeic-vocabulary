@@ -11,11 +11,11 @@ import {
 	finishDraft,
 	getDayWords,
 	getDraft,
-	importDay,
 	listDrafts,
 	nextClassDay,
 	saveDraft
 } from '$lib/server/repo';
+import { register } from '../support/register';
 import type { DraftItem } from '$lib/domain/types';
 
 let db: DatabaseSync;
@@ -131,12 +131,12 @@ describe('수업 단어 기본 Day 번호 (R-47)', () => {
 	});
 
 	it('가장 큰 Day + 1이다', () => {
-		importDay(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
 		expect(nextClassDay(db)).toBe(4);
 	});
 
 	it('처리 중이거나 확인 대기인 수업 단어 초안의 번호도 센다', () => {
-		importDay(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
 		createDraft(db, { day: 4, section: 'class', photoCount: 1 });
 		expect(nextClassDay(db)).toBe(5);
 		readyDraft(6);
@@ -144,7 +144,7 @@ describe('수업 단어 기본 Day 번호 (R-47)', () => {
 	});
 
 	it('실패한 초안과 내 단어 초안은 세지 않는다', () => {
-		importDay(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 3, words: [{ english: 'apple', meaning: '사과' }] });
 		const { id } = createDraft(db, { day: 8, section: 'class', photoCount: 1 });
 		failDraft(db, id, '실패');
 		createDraft(db, { day: 9, section: 'mine', photoCount: 1 });
@@ -201,7 +201,7 @@ describe('등록 (R-64, R-65)', () => {
 	});
 
 	it('수업 단어로 등록하면 같은 Day의 내 단어를 옮긴다', () => {
-		importDay(db, { day: 5, section: 'mine', words: [{ english: 'apple', meaning: '사과' }] });
+		register(db, { day: 5, section: 'mine', words: [{ english: 'apple', meaning: '사과' }] });
 		const id = readyDraft(5);
 		const result = commitDraft(db, id, { day: 5, section: 'class', items: [item('apple', '사과')] });
 		expect(result.moved.map((w) => w.english)).toEqual(['apple']);

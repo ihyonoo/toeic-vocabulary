@@ -8,7 +8,6 @@ import type {
 	DraftInput,
 	DraftItem,
 	DraftSummary,
-	ImportInput,
 	ImportItem,
 	ImportResult,
 	Section,
@@ -145,17 +144,14 @@ function isBaseSection(value: unknown): value is BaseSection {
 const BASE_SECTION_RULE = "section은 'class'나 'mine'이어야 해요.";
 
 // 커스텀 묶음은 사진 등록(초안)에서만 받는다
-function cleanPlace(section: unknown, customName: unknown, allowCustom: boolean): Place {
-	if (allowCustom && section === 'custom') {
+function cleanPlace(section: unknown, customName: unknown): Place {
+	if (section === 'custom') {
 		const name = cleanCustomName(customName);
 		if (name === null) throw new RepoError('invalid_request', CUSTOM_NAME_RULE);
 		return { section, customName: name };
 	}
 	if (!isBaseSection(section)) {
-		throw new RepoError(
-			'invalid_request',
-			allowCustom ? "section은 'class', 'mine', 'custom' 중 하나여야 해요." : BASE_SECTION_RULE
-		);
+		throw new RepoError('invalid_request', "section은 'class', 'mine', 'custom' 중 하나여야 해요.");
 	}
 	if (customName !== undefined && customName !== null) {
 		throw new RepoError('invalid_request', '숙제 단어와 내 단어에는 묶음 이름을 붙이지 않아요.');
@@ -164,14 +160,6 @@ function cleanPlace(section: unknown, customName: unknown, allowCustom: boolean)
 }
 
 type CleanItem = { english: string; meaning: string; pos: string; example: string; exampleKo: string };
-
-function cleanImport(input: unknown): { day: number; place: Place; words: CleanItem[] } {
-	const { day, words, section = 'class', customName } = (input ?? {}) as Partial<ImportInput> & {
-		customName?: unknown;
-	};
-	if (!isPositiveInt(day)) throw new RepoError('invalid_request', 'Day 번호는 1 이상의 정수여야 해요.');
-	return { day, place: cleanPlace(section, customName, false), words: cleanWords(words) };
-}
 
 function cleanWords(words: unknown): CleanItem[] {
 	if (!Array.isArray(words) || words.length === 0) {
@@ -199,11 +187,6 @@ function cleanWords(words: unknown): CleanItem[] {
 		throw new RepoError('invalid_request', `잘못된 항목이 있어요 (인덱스: ${bad.join(', ')}).`);
 	}
 	return cleaned;
-}
-
-export function importDay(db: DatabaseSync, input: ImportInput): ImportResult {
-	const clean = cleanImport(input);
-	return tx(db, () => importClean(db, clean));
 }
 
 // 트랜잭션 없이 실행한다
@@ -605,7 +588,7 @@ function isDraftItem(value: unknown): value is DraftItem {
 function cleanDraftInput(input: unknown): { day: number; place: Place; items: DraftItem[] } {
 	const { day, section, customName, items } = (input ?? {}) as Partial<DraftInput>;
 	if (!isPositiveInt(day)) throw new RepoError('invalid_request', 'Day 번호는 1 이상의 정수여야 해요.');
-	const place = cleanPlace(section, customName, true);
+	const place = cleanPlace(section, customName);
 	if (!Array.isArray(items) || !items.every(isDraftItem)) {
 		throw new RepoError('invalid_request', '단어 목록이 잘못됐어요.');
 	}

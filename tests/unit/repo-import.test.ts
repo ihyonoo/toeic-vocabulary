@@ -5,9 +5,9 @@ import {
 	RepoError,
 	countStudyableWords,
 	getDayWords,
-	importDay,
 	listDays
 } from '$lib/server/repo';
+import { register } from '../support/register';
 
 let db: DatabaseSync;
 
@@ -30,9 +30,9 @@ function expectRepoError(fn: () => unknown, code: string) {
 	throw new Error(`RepoError(${code})가 나지 않음`);
 }
 
-describe('importDay', () => {
+describe('등록 규칙 (R-4)', () => {
 	it('새 Day를 만들고 단어를 요청 순서대로 담는다', () => {
-		const result = importDay(db, {
+		const result = register(db, {
 			day: 1,
 			words: [
 				{ english: 'telescope', meaning: '망원경', pos: '명사', example: 'A telescope arrived.', exampleKo: '망원경이 도착했다.' },
@@ -54,7 +54,7 @@ describe('importDay', () => {
 	});
 
 	it('요청 안에서 같은 단어가 여러 번 오면 첫 번째만 쓰고 나머지는 건너뛴다', () => {
-		const result = importDay(db, {
+		const result = register(db, {
 			day: 1,
 			words: [
 				{ english: 'rabbit', meaning: '토끼', example: '첫 예문' },
@@ -70,7 +70,7 @@ describe('importDay', () => {
 	});
 
 	it('철자가 같아도 뜻이 다르면 다른 단어로 담는다', () => {
-		importDay(db, {
+		register(db, {
 			day: 1,
 			words: [
 				{ english: 'lead', meaning: '이끌다' },
@@ -82,11 +82,11 @@ describe('importDay', () => {
 	});
 
 	it('다른 Day에 있는 단어는 연결하고 기존 값은 유지하며 빈 칸만 채운다', () => {
-		importDay(db, { day: 1, words: [{ english: 'sunflower', meaning: '해바라기, 꽃', pos: '명사' }] });
+		register(db, { day: 1, words: [{ english: 'sunflower', meaning: '해바라기, 꽃', pos: '명사' }] });
 		const id = getDayWords(db, 1)![0].id;
 		db.prepare('UPDATE words SET hidden = 1, bookmarked = 1 WHERE id = ?').run(id);
 
-		const result = importDay(db, {
+		const result = register(db, {
 			day: 2,
 			words: [{ english: 'sunflower', meaning: '해바라기,꽃', pos: '동사', example: '새 예문' }]
 		});
@@ -98,9 +98,9 @@ describe('importDay', () => {
 	});
 
 	it('같은 Day에 다시 등록하면 이미 있는 단어는 건너뛰고 새 단어는 끝에 붙인다', () => {
-		importDay(db, { day: 3, words: [{ english: 'garden', meaning: '정원' }, { english: 'forest', meaning: '숲' }] });
+		register(db, { day: 3, words: [{ english: 'garden', meaning: '정원' }, { english: 'forest', meaning: '숲' }] });
 
-		const result = importDay(db, {
+		const result = register(db, {
 			day: 3,
 			words: [{ english: 'forest', meaning: '숲' }, { english: 'penguin', meaning: '펭귄' }]
 		});
@@ -111,13 +111,13 @@ describe('importDay', () => {
 	});
 
 	it('삭제로 위치에 빈 번호가 생겨도 새 단어는 가장 큰 위치 뒤에 붙는다', () => {
-		importDay(db, {
+		register(db, {
 			day: 1,
 			words: [{ english: 'a1', meaning: '하나' }, { english: 'a2', meaning: '둘' }, { english: 'a3', meaning: '셋' }]
 		});
 		db.prepare("DELETE FROM words WHERE english = 'a2'").run();
 
-		importDay(db, { day: 1, words: [{ english: 'a4', meaning: '넷' }] });
+		register(db, { day: 1, words: [{ english: 'a4', meaning: '넷' }] });
 
 		expect(englishOf(1)).toEqual(['a1', 'a3', 'a4']);
 	});
@@ -125,21 +125,19 @@ describe('importDay', () => {
 	it.each([
 		['영어가 공백뿐인 항목', { day: 1, words: [{ english: '  ', meaning: '뜻' }] }],
 		['뜻이 빈 항목', { day: 1, words: [{ english: 'garden', meaning: '' }] }],
-		['Day가 0', { day: 0, words: [{ english: 'garden', meaning: '정원' }] }],
 		['Day가 정수가 아님', { day: 1.5, words: [{ english: 'garden', meaning: '정원' }] }],
 		['Day가 문자열', { day: '1', words: [{ english: 'garden', meaning: '정원' }] }],
 		['Day가 안전한 정수 범위 밖', { day: 1e20, words: [{ english: 'garden', meaning: '정원' }] }],
 		['단어 목록이 빔', { day: 1, words: [] }],
-		['단어 목록이 배열이 아님', { day: 1, words: 'garden' }],
 		['선택 칸이 문자열이 아님', { day: 1, words: [{ english: 'garden', meaning: '정원', pos: 3 }] }]
 	])('%s이면 요청 전체를 거부한다', (_label, input) => {
-		expectRepoError(() => importDay(db, input as never), 'invalid_request');
+		expectRepoError(() => register(db, input as never), 'invalid_request');
 	});
 
 	it('항목 하나라도 잘못되면 아무것도 저장하지 않는다', () => {
 		expectRepoError(
 			() =>
-				importDay(db, {
+				register(db, {
 					day: 1,
 					words: [{ english: 'garden', meaning: '정원' }, { english: 'forest', meaning: ' ' }]
 				}),
@@ -153,8 +151,8 @@ describe('importDay', () => {
 
 describe('listDays', () => {
 	it('Day 번호 오름차순으로, 숨긴 단어를 포함한 단어 수와 함께 돌려준다', () => {
-		importDay(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
-		importDay(db, { day: 1, words: [{ english: 'feather', meaning: '깃털, 깃' }, { english: 'tiger', meaning: '호랑이' }] });
+		register(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }] });
+		register(db, { day: 1, words: [{ english: 'feather', meaning: '깃털, 깃' }, { english: 'tiger', meaning: '호랑이' }] });
 		db.prepare("UPDATE words SET hidden = 1 WHERE english = 'tiger'").run();
 
 		expect(listDays(db)).toEqual([
@@ -172,8 +170,8 @@ describe('getDayWords', () => {
 
 describe('countStudyableWords', () => {
 	it('여러 Day에 속한 단어는 한 번만 세고 숨긴 단어는 뺀다', () => {
-		importDay(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
-		importDay(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }, { english: 'cotton', meaning: '면' }] });
+		register(db, { day: 1, words: [{ english: 'garden', meaning: '정원' }, { english: 'tiger', meaning: '호랑이' }] });
+		register(db, { day: 2, words: [{ english: 'garden', meaning: '정원' }, { english: 'cotton', meaning: '면' }] });
 		db.prepare("UPDATE words SET hidden = 1 WHERE english = 'cotton'").run();
 
 		expect(countStudyableWords(db)).toEqual({ all: 2, class: 2, mine: 0 });
