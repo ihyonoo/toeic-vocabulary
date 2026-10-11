@@ -28,7 +28,9 @@ function loadBrowse(url: URL) {
 	if (scope !== 'day' || !/^\d+$/.test(raw) || day < 1) error(400, INVALID);
 	const words = getDayWords(db, day);
 	if (!words) error(404, 'Day를 찾을 수 없어요.');
-	return { ...base, scope: 'day' as const, day, words: words as Word[] };
+	// Day 화면처럼 숨긴 단어는 맨 뒤
+	const ordered = [...words.filter((w) => !w.hidden), ...words.filter((w) => w.hidden)];
+	return { ...base, scope: 'day' as const, day, words: ordered as Word[] };
 }
 
 export const load: PageServerLoad = ({ url }) => {

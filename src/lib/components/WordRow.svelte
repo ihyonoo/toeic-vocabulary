@@ -1,5 +1,7 @@
 <script lang="ts">
 	import BookmarkSimpleIcon from 'phosphor-svelte/lib/BookmarkSimpleIcon';
+	import EyeIcon from 'phosphor-svelte/lib/EyeIcon';
+	import EyeSlashIcon from 'phosphor-svelte/lib/EyeSlashIcon';
 	import type { Word } from '$lib/domain/types';
 	import { isEnglishMasked, isMeaningMasked, prefs } from '$lib/client/prefs.svelte';
 	import MaskCell from './MaskCell.svelte';
@@ -93,7 +95,7 @@
 
 <li class="item" class:hidden-word={word.hidden} data-row-open={open || undefined}>
 	{#if open || drag !== null}
-		<div class="menu">
+		<div class="menu" data-testid="row-menu">
 			<button type="button" class="action" onclick={onhide}>{word.hidden ? '숨김 해제' : '숨기기'}</button>
 			<button type="button" class="action" onclick={onedit}>수정</button>
 			<button type="button" class="action danger" onclick={ondelete}>삭제</button>
@@ -129,6 +131,13 @@
 		>
 			<BookmarkSimpleIcon size={22} weight={word.bookmarked ? 'fill' : 'regular'} />
 		</button>
+		<button type="button" class="icon-btn hide" aria-label={word.hidden ? '숨김 해제' : '숨기기'} onclick={onhide}>
+			{#if word.hidden}
+				<EyeIcon size={22} />
+			{:else}
+				<EyeSlashIcon size={22} />
+			{/if}
+		</button>
 	</div>
 </li>
 
@@ -161,7 +170,7 @@
 	.row {
 		position: relative;
 		display: grid;
-		grid-template-columns: 1fr 1fr auto;
+		grid-template-columns: 1fr 1fr auto auto;
 		gap: 12px;
 		align-items: center;
 		min-height: 64px;
@@ -182,7 +191,8 @@
 		font-size: 15px;
 		line-height: 1.4;
 	}
-	.mark {
+	.mark,
+	.hide {
 		color: var(--muted);
 	}
 	.mark.on {

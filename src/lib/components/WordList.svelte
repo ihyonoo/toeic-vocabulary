@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	// 열린 밀기 메뉴를 닫은 탭이 다른 목록(수업·내 단어)의 카드 보기로 이어지지 않게 두 목록이 함께 본다
+	// 열린 밀기 메뉴를 닫은 탭이 다른 목록(수업·내·숨긴 단어)의 카드 보기로 이어지지 않게 모든 목록이 함께 본다
 	let menuClosedAt = -Infinity;
 </script>
 
@@ -16,8 +16,13 @@
 
 	let {
 		words = $bindable(),
-		cardHref
-	}: { words: Word[]; cardHref?: (word: Word) => string } = $props();
+		cardHref,
+		visible
+	}: { words: Word[]; cardHref?: (word: Word) => string; visible?: (word: Word) => boolean } = $props();
+
+	// 한 배열을 여러 목록이 나눠 보여 줄 때 쓴다
+	// 삭제는 원래 배열에서 뺀다
+	const shown = $derived(visible ? words.filter(visible) : words);
 
 	let openId = $state<number | null>(null);
 	let editing = $state<Word | null>(null);
@@ -95,7 +100,7 @@
 <svelte:document {onpointerdown} />
 
 <ul class="word-list">
-	{#each words as word (word.id)}
+	{#each shown as word (word.id)}
 		<WordRow
 			{word}
 			open={openId === word.id}
