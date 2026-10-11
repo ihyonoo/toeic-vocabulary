@@ -256,9 +256,6 @@
 							{/if}
 							<span class="line">
 								<span class="meaning" class:blank={!item.meaning}>{item.meaning || '비어 있음'}</span>
-								{#if item.meaningFilled}
-									<span class="tag">AI가 채움</span>
-								{/if}
 							</span>
 						</button>
 					</li>
@@ -434,13 +431,6 @@
 	}
 	.blank {
 		color: var(--danger);
-	}
-	.tag {
-		padding: 1px 8px;
-		border-radius: 999px;
-		border: 1px solid var(--orange);
-		color: var(--orange);
-		font-size: 12px;
 	}
 	.bottom-bar {
 		position: fixed;

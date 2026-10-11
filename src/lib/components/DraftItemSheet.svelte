@@ -39,7 +39,7 @@
 			error = '영어와 뜻은 비울 수 없어요.';
 			return;
 		}
-		// 표시 칸(paperEnglish, meaningFilled)은 AI가 한 일이라 그대로 둔다
+		// 표시 칸(paperEnglish)은 AI가 한 일이라 그대로 둔다
 		onsave({ ...item!, english: english.trim(), pos: pos.trim(), meaning: meaning.trim(), example: example.trim(), exampleKo: exampleKo.trim() });
 	}
 </script>

@@ -40,7 +40,7 @@ function expectRepoError(fn: () => unknown, code: string, message?: string) {
 }
 
 function item(english: string, meaning: string): DraftItem {
-	return { english, meaning, pos: '', example: '', exampleKo: '', paperEnglish: null, meaningFilled: false };
+	return { english, meaning, pos: '', example: '', exampleKo: '', paperEnglish: null };
 }
 
 // 사진 초안을 거쳐 커스텀 묶음으로 등록한다

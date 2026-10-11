@@ -69,8 +69,6 @@ export type DraftItem = {
 	exampleKo: string;
 	// AI가 철자를 고쳤을 때 종이의 철자, 아니면 null
 	paperEnglish: string | null;
-	// 종이에 뜻이 없어 AI가 채웠는가
-	meaningFilled: boolean;
 };
 
 export type DraftSummary = {

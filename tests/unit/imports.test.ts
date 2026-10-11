@@ -26,7 +26,6 @@ const word = {
 	english: 'apple',
 	paperEnglish: null,
 	meaning: '사과',
-	meaningFilled: false,
 	pos: '명사',
 	example: 'An apple.',
 	exampleKo: '사과.'

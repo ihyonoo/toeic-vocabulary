@@ -20,7 +20,6 @@ function word(english: string, meaning: string, extra: Record<string, unknown> =
 		english,
 		paperEnglish: null,
 		meaning,
-		meaningFilled: false,
 		pos: '명사',
 		example: `The ${english} is here.`,
 		exampleKo: `${meaning}이 여기 있다.`,
@@ -87,7 +86,7 @@ test('숙제 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 →
 	// 가짜 서버는 사진마다 같은 두 단어를 돌려준다 → apple, river, apple, river
 	await scenario(request, {
 		delayMs: 1500,
-		words: [word('apple', '사과', { paperEnglish: 'aple' }), word('river', '강', { meaningFilled: true })]
+		words: [word('apple', '사과', { paperEnglish: 'aple' }), word('river', '강')]
 	});
 	await upload(page, { day: 951, photos: 2 });
 	await expect(page.getByText('AI가 단어를 읽고 있어요')).toBeVisible();
@@ -96,7 +95,6 @@ test('숙제 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 →
 	await expect(page.getByTestId('item-count')).toHaveText('4단어', { timeout: 10_000 });
 	const rows = page.getByRole('listitem');
 	await expect(rows.nth(0)).toContainText('종이: aple');
-	await expect(rows.nth(1)).toContainText('AI가 채움');
 
 	// 사진마다 따로, JPEG로 줄여 보낸다
 	const sent: { body: { input: { content: { type: string; image_url: string }[] }[] } }[] = await (
@@ -129,7 +127,6 @@ test('숙제 단어: 처리 중 → 미리보기 → 고치고 빼고 등록 →
 	await page.reload();
 	await expect(page.getByTestId('item-count')).toHaveText('3단어');
 	await expect(rows.nth(1)).toContainText('강, 하천');
-	await expect(rows.nth(1)).toContainText('AI가 채움');
 
 	await page.getByRole('button', { name: '3단어 등록' }).click();
 	await expect(page.getByText('등록했어요')).toBeVisible();
@@ -223,9 +220,17 @@ test('미리보기에서 Day 번호와 묶음을 바꿔 등록한다 (R-63)', as
 });
 
 test('뜻이 빈 행이 있으면 등록하지 않는다 (R-64)', async ({ page, request }) => {
-	await scenario(request, { words: [word('ok956', '좋음'), word('blank956', '')] });
+	await scenario(request, { words: [word('ok956', '좋음')] });
 	await upload(page, { day: 956 });
-	await expect(page.getByTestId('item-count')).toHaveText('2단어', { timeout: 10_000 });
+	await expect(page.getByTestId('item-count')).toHaveText('1단어', { timeout: 10_000 });
+	// AI 결과의 빈 뜻은 서버가 빼므로 초안 저장으로 빈 행을 만든다
+	const saved = await request.put(`/api/imports/${page.url().split('/').pop()}`, {
+		headers: AUTH,
+		data: { day: 956, section: 'class', items: [word('ok956', '좋음'), word('blank956', '')] }
+	});
+	expect(saved.status()).toBe(200);
+	await page.reload();
+	await expect(page.getByTestId('item-count')).toHaveText('2단어');
 	await expect(page.getByRole('listitem').nth(1)).toContainText('비어 있음');
 	await page.getByRole('button', { name: '2단어 등록' }).click();
 	await expect(page.getByText('영어와 뜻이 빈 단어가 있어요.')).toBeVisible();

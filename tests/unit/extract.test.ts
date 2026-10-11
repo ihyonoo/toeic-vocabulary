@@ -19,7 +19,6 @@ function raw(english: string, meaning: string, extra: Record<string, unknown> = 
 		english,
 		paperEnglish: null,
 		meaning,
-		meaningFilled: false,
 		pos: '명사',
 		example: 'An example.',
 		exampleKo: '예문.',
@@ -51,7 +50,6 @@ describe('요청', () => {
 			'english',
 			'paperEnglish',
 			'meaning',
-			'meaningFilled',
 			'pos',
 			'example',
 			'exampleKo'
@@ -62,17 +60,18 @@ describe('요청', () => {
 });
 
 describe('응답 처리', () => {
-	it('칸을 다듬고, 철자가 같으면 원래 철자를 비우고, 영어가 빈 항목을 버린다', async () => {
+	it('칸을 다듬고, 철자가 같으면 원래 철자를 비우고, 영어나 뜻이 빈 항목을 버린다', async () => {
 		fake.setScenario({
 			words: [
-				raw(' apple ', ' 사과 ', { paperEnglish: 'aple', meaningFilled: true }),
+				raw(' apple ', ' 사과 ', { paperEnglish: 'aple' }),
 				raw('River', '강', { paperEnglish: 'river' }),
-				raw('  ', '빈 줄')
+				raw('  ', '빈 줄'),
+				raw('pear', '  ')
 			]
 		});
 		const { items, usage } = await extractWords(PHOTO_1, opts());
 		expect(items).toEqual([
-			{ ...raw('apple', '사과'), paperEnglish: 'aple', meaningFilled: true },
+			{ ...raw('apple', '사과'), paperEnglish: 'aple' },
 			{ ...raw('River', '강'), paperEnglish: null }
 		]);
 		expect(usage).toEqual({ input: 7000, output: 9000 });
@@ -92,7 +91,7 @@ describe('실패 이유 (R-56)', () => {
 		[{ kind: 'refusal' }, 'AI가 이 사진 처리를 거절했어요.'],
 		[{ kind: 'failed' }, 'AI 처리에 실패했어요.'],
 		[{ kind: 'invalid_json' }, 'AI 응답을 읽지 못했어요.'],
-		[{ kind: 'ok', words: [] }, '사진에서 단어를 찾지 못했어요.'],
+		[{ kind: 'ok', words: [] }, '사진에서 영어와 뜻이 함께 적힌 단어를 찾지 못했어요.'],
 		[{ kind: 'error', status: 401 }, 'OpenAI API 키가 잘못됐어요.'],
 		[{ kind: 'error', status: 429, code: 'insufficient_quota' }, 'OpenAI 크레딧이 부족해요.'],
 		[{ kind: 'error', status: 429 }, '요청이 많아 잠시 막혔어요. 잠시 뒤 다시 올려 주세요.'],

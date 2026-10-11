@@ -13,8 +13,7 @@ export function register(
 		pos: w.pos ?? '',
 		example: w.example ?? '',
 		exampleKo: w.exampleKo ?? '',
-		paperEnglish: null,
-		meaningFilled: false
+		paperEnglish: null
 	}));
 	const draft = createDraft(db, { day, section: 'class', photoCount: 1 });
 	finishDraft(db, draft.id, items);
