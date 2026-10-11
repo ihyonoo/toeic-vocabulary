@@ -579,8 +579,7 @@ function isDraftItem(value: unknown): value is DraftItem {
 		typeof v === 'object' &&
 		v !== null &&
 		['english', 'meaning', 'pos', 'example', 'exampleKo'].every((k) => typeof v[k] === 'string') &&
-		(v.paperEnglish === null || typeof v.paperEnglish === 'string') &&
-		typeof v.meaningFilled === 'boolean'
+		(v.paperEnglish === null || typeof v.paperEnglish === 'string')
 	);
 }
 
@@ -598,8 +597,7 @@ function cleanDraftInput(input: unknown): { day: number; place: Place; items: Dr
 		pos: i.pos,
 		example: i.example,
 		exampleKo: i.exampleKo,
-		paperEnglish: i.paperEnglish,
-		meaningFilled: i.meaningFilled
+		paperEnglish: i.paperEnglish
 	}));
 	return { day, place, items: cleaned };
 }

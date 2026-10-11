@@ -43,7 +43,6 @@ function item(english: string, meaning: string, extra: Partial<DraftItem> = {}):
 		example: `An ${english}.`,
 		exampleKo: `${meaning}.`,
 		paperEnglish: null,
-		meaningFilled: false,
 		...extra
 	};
 }
@@ -161,6 +160,12 @@ describe('미리보기 저장 (R-63, R-67)', () => {
 		expect(getDraft(db, id).items).toEqual(items);
 	});
 
+	it('옛 초안의 뜻 채움 표시는 받아 주고 저장하지 않는다', () => {
+		const id = readyDraft();
+		saveDraft(db, id, { day: 3, section: 'class', items: [{ ...item('apple', '사과'), meaningFilled: true }] });
+		expect(getDraft(db, id).items).toEqual([item('apple', '사과')]);
+	});
+
 	it('확인 대기가 아니면 draft_not_ready다', () => {
 		const { id } = createDraft(db, { day: 3, section: 'class', photoCount: 1 });
 		expectRepoError(() => saveDraft(db, id, { day: 3, section: 'class', items: [] }), 'draft_not_ready');
@@ -177,7 +182,6 @@ describe('미리보기 저장 (R-63, R-67)', () => {
 		['단어 목록이 배열이 아님', { day: 3, section: 'class', items: {} }],
 		['칸이 문자열이 아님', { day: 3, section: 'class', items: [{ ...item('a', 'b'), pos: 1 }] }],
 		['원래 철자가 문자열·null이 아님', { day: 3, section: 'class', items: [{ ...item('a', 'b'), paperEnglish: 1 }] }],
-		['채움 표시가 불리언이 아님', { day: 3, section: 'class', items: [{ ...item('a', 'b'), meaningFilled: 'y' }] }],
 		['본문이 없음', null]
 	])('%s이면 invalid_request다', (_, input) => {
 		const id = readyDraft();

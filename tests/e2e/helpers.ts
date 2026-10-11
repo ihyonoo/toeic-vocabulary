@@ -16,8 +16,7 @@ async function seedDraft(request: APIRequestContext, target: Target, words: Item
 		pos: w.pos ?? '',
 		example: w.example ?? '',
 		exampleKo: w.exampleKo ?? '',
-		paperEnglish: null,
-		meaningFilled: false
+		paperEnglish: null
 	}));
 	const scenario = await request.post(`${FAKE_OPENAI}/__scenario`, { data: { words: items } });
 	expect(scenario.status()).toBe(204);

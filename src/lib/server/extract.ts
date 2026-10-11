@@ -21,21 +21,29 @@ export class ExtractError extends Error {}
 
 const PROMPT = `너는 한국 토익 학원 단어장 사진 한 장에서 단어를 옮겨 적는다.
 
+단어의 조건
+- 단어는 영어 단어나 숙어와 그 한국어 뜻이 짝지어 적힌 줄이다. 인쇄물이든 손글씨든 같다.
+- 사진에 그런 줄이 하나도 없으면 words를 빈 배열로 둔다. 영어 지문, 문제지, 책 본문, 메뉴판, 간판, 화면 캡처, 글자가 없는 사진이 여기에 해당한다.
+- 그런 줄과 다른 내용이 섞여 있으면 그런 줄만 옮긴다.
+
 읽는 순서
 - 위에서 아래로 읽는다. 단이 여러 개면 왼쪽 단부터 읽는다.
 
 항목 규칙
 - 단어 줄 하나가 항목 하나다. 같은 단어가 다시 나와도 모두 넣는다.
 - 제목, 날짜, 줄 번호, 머리말, 쪽 번호처럼 단어가 아닌 것은 넣지 않는다.
+- 뜻 없이 영어만 있는 줄, 영어 없이 한국어만 있는 줄은 넣지 않는다.
+- 단어 줄 밖의 문장, 지문, 문제, 보기는 넣지 않는다. 그 안의 단어를 골라 항목으로 만들지도 않는다.
+- 사진에 없는 단어나 뜻을 지어내지 않는다.
 
 칸 규칙
 - english: 종이의 영어 단어나 숙어. 철자가 명백히 틀렸을 때만 고치고, 그때 paperEnglish에 종이의 철자를 그대로 넣는다. 고치지 않았으면 paperEnglish는 null이다. 영국식 철자, 대소문자, 하이픈은 고치지 않는다.
-- meaning: 종이의 한국어 뜻을 글자 그대로 옮긴다. '영어 [뜻, 뜻]' 형식이면 대괄호를 빼고 '뜻, 뜻'으로 쓴다. 종이에 뜻이 없으면 토익에서 쓰는 뜻을 직접 쓰고 meaningFilled를 true로 한다. 종이에 뜻이 있으면 meaningFilled는 false다.
+- meaning: 종이의 한국어 뜻을 글자 그대로 옮긴다. '영어 [뜻, 뜻]' 형식이면 대괄호를 빼고 '뜻, 뜻'으로 쓴다.
 - pos: 명사, 동사, 형용사, 부사, 전치사, 접속사, 대명사 중에서 고르고, 맞는 것이 없으면 가장 가까운 한국어 품사 이름을 쓴다. 숙어나 구는 '구'로 쓴다. 뜻마다 품사가 다르면 뜻 순서대로 '동사, 명사'처럼 쓴다.
 - example: 그 단어를 쓴 토익 맥락의 짧은 영어 문장 하나. 15단어 이하.
 - exampleKo: example의 자연스러운 한국어 해석.`;
 
-const WORD_FIELDS = ['english', 'paperEnglish', 'meaning', 'meaningFilled', 'pos', 'example', 'exampleKo'];
+const WORD_FIELDS = ['english', 'paperEnglish', 'meaning', 'pos', 'example', 'exampleKo'];
 
 const SCHEMA = {
 	type: 'object',
@@ -52,7 +60,6 @@ const SCHEMA = {
 					english: { type: 'string' },
 					paperEnglish: { type: ['string', 'null'] },
 					meaning: { type: 'string' },
-					meaningFilled: { type: 'boolean' },
 					pos: { type: 'string' },
 					example: { type: 'string' },
 					exampleKo: { type: 'string' }
@@ -73,8 +80,7 @@ function toItem(raw: Record<string, unknown>): DraftItem {
 		pos: text(raw.pos),
 		example: text(raw.example),
 		exampleKo: text(raw.exampleKo),
-		paperEnglish: paper && paper.toLowerCase() !== english.toLowerCase() ? paper : null,
-		meaningFilled: raw.meaningFilled === true
+		paperEnglish: paper && paper.toLowerCase() !== english.toLowerCase() ? paper : null
 	};
 }
 
@@ -151,8 +157,8 @@ export async function extractWords(
 	}
 	const items = (Array.isArray(words) ? words : [])
 		.map((w) => toItem((w ?? {}) as Record<string, unknown>))
-		.filter((w) => w.english !== '');
-	if (items.length === 0) throw new ExtractError('사진에서 단어를 찾지 못했어요.');
+		.filter((w) => w.english !== '' && w.meaning !== '');
+	if (items.length === 0) throw new ExtractError('사진에서 영어와 뜻이 함께 적힌 단어를 찾지 못했어요.');
 
 	return {
 		items,
