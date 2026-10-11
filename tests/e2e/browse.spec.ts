@@ -203,3 +203,49 @@ test('카드 보기 주소의 mode·start가 잘못되면 이유를 보여준다
 	await page.goto('/study?scope=day&day=941&mode=browse&start=abc');
 	await expect(page.getByText('학습 설정이 잘못됐어요')).toBeVisible();
 });
+
+// 어절마다 글자들이 놓인 줄의 top을 모은다
+async function lineTops(cell: import('@playwright/test').Locator) {
+	return cell.evaluate((el) => {
+		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+		let node = walker.nextNode();
+		while (node && !node.textContent!.trim()) node = walker.nextNode();
+		const text = node!.textContent!;
+		const range = document.createRange();
+		const words: number[][] = [[]];
+		for (let i = 0; i < text.length; i++) {
+			if (text[i] === ' ') {
+				words.push([]);
+				continue;
+			}
+			range.setStart(node!, i);
+			range.setEnd(node!, i + 1);
+			words.at(-1)!.push(Math.round(range.getBoundingClientRect().top));
+		}
+		return words;
+	});
+}
+
+test('행의 영어·뜻은 어절 단위로 줄을 바꾸고, 숨김 버튼은 북마크 왼쪽에 있다', async ({ page, request }) => {
+	await seedDay(request, 943, [
+		{ english: 'neighborhood', meaning: '우리 동네 근처의 조용한 공원' },
+		{ english: 'word943', meaning: '띄어쓰기없이아주길게이어지는뜻풀이' }
+	]);
+	await page.goto('/days/943');
+
+	const english = await lineTops(page.getByText('neighborhood', { exact: true }));
+	expect(new Set(english.flat()).size).toBe(1);
+
+	const meaning = await lineTops(page.getByText('우리 동네 근처의 조용한 공원'));
+	expect(new Set(meaning.flat()).size).toBeGreaterThan(1);
+	for (const tops of meaning) expect(new Set(tops).size).toBe(1);
+
+	// 띄어쓰기가 없으면 칸을 넘지 않게 어절 안에서 자른다
+	const long = await lineTops(page.getByText('띄어쓰기없이아주길게이어지는뜻풀이'));
+	expect(new Set(long.flat()).size).toBeGreaterThan(1);
+
+	const row = page.getByRole('listitem').filter({ hasText: 'neighborhood' });
+	const hide = (await row.getByRole('button', { name: '숨기기' }).boundingBox())!;
+	const mark = (await row.getByRole('button', { name: '북마크' }).boundingBox())!;
+	expect(hide.x).toBeLessThan(mark.x);
+});
